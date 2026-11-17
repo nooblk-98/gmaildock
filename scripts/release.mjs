@@ -23,11 +23,19 @@ const edit = (file, change) => {
   if (next === raw) throw new Error(`${file}: version not updated`);
   writeFileSync(file, next);
 };
-const current = JSON.parse(readFileSync('package.json', 'utf8')).version;
+const readJson = (file) => JSON.parse(readFileSync(file, 'utf8'));
+const writeJson = (file, value) => writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
 
-edit('package.json', (t) => t.replace(`"version":"${current}"`, `"version":"${version}"`));
-edit('package-lock.json', (t) =>
-  t.replace(`"version": "${current}"`, `"version": "${version}"`).replace(`"version": "${current}"`, `"version": "${version}"`));
+const manifest = readJson('package.json');
+const current = manifest.version;
+manifest.version = version;
+writeJson('package.json', manifest);
+
+const lock = readJson('package-lock.json');
+lock.version = version;
+if (lock.packages?.['']) lock.packages[''].version = version;
+writeJson('package-lock.json', lock);
+
 edit('src-tauri/tauri.conf.json', (t) => t.replace(`"version": "${current}"`, `"version": "${version}"`));
 edit('src-tauri/Cargo.toml', (t) => t.replace(`version = "${current}"`, `version = "${version}"`));
 edit('src-tauri/Cargo.lock', (t) => t.replace(/(name = "gmaildock"\r?\nversion = )"[^"]+"/, `$1"${version}"`));

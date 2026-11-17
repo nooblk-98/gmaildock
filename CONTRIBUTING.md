@@ -16,14 +16,14 @@ npm run dev
 ## Before opening a pull request
 
 ```sh
-npm run check                                   # regression checks (unread badge, count parsing)
+npm run check                                   # regression checks (unread badge, count parsing, injected UI)
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI runs the same checks. The UI injected into Gmail lives in `src-tauri/src/injected.js`; the native side is `src-tauri/src/main.rs`.
+CI runs the same checks. The UI injected into Gmail lives in `src-tauri/src/injected.js`; the native side is split by concern in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `updater.rs`, and `downloads.rs`).
 
 ## Cutting a release (maintainers)
 

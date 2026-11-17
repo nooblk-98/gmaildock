@@ -1,4 +1,5 @@
 (() => {
+  if (window !== window.top) return;
   const accountLink = 'Manage your Google Account';
   const interactive = 'a, button, [role="button"]';
 
@@ -37,8 +38,8 @@
       }
     }).observe(document.documentElement, { childList: true, subtree: true });
 
-    if (window !== window.top) return;
     if (location.hostname !== 'mail.google.com') return;
+    if (!document.body) return;
 
     let unreadCount;
     let missingSince;
@@ -135,7 +136,8 @@
     const startAtLogin = addOption('Start automatically at login');
     const startMinimized = addOption('Start minimized to tray at login');
     const notifications = addOption('Notify me about new mail');
-    const options = [autoUpdates, closeToTray, startAtLogin, startMinimized, notifications];
+    const externalLinks = addOption('Open non-Google links in my browser');
+    const options = [autoUpdates, closeToTray, startAtLogin, startMinimized, notifications, externalLinks];
 
     const zoomRow = make('div');
     Object.assign(zoomRow.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', minHeight: '48px', borderTop: '1px solid #eef1f1' });
@@ -213,7 +215,7 @@
     overlay.append(dialog);
     ui.append(panel, bar, overlay);
     document.body.append(host);
-    let settings = { autoCheckUpdates: true, closeToTray: true, startAtLogin: true, notifications: true, startMinimized: false, zoom: 1 };
+    let settings = { autoCheckUpdates: true, closeToTray: true, startAtLogin: true, notifications: true, startMinimized: false, openExternalInBrowser: true, zoom: 1 };
     let availableUpdate;
     let announcedVersion;
     let checking = false;
@@ -234,6 +236,9 @@
       updateHeading.textContent = `GmailDock v${availableUpdate.version} is available`;
       releaseNotes.textContent = availableUpdate.notes?.trim() || 'Release notes are unavailable.';
       updateStatus.textContent = '';
+      installButton.textContent = 'Update now';
+      installButton.disabled = false;
+      laterButton.disabled = false;
       overlay.style.display = 'flex';
       installButton.focus();
     }
@@ -276,6 +281,7 @@
       startAtLogin.checked = settings.startAtLogin;
       startMinimized.checked = settings.startMinimized;
       notifications.checked = settings.notifications;
+      externalLinks.checked = settings.openExternalInBrowser;
       zoomValue.textContent = `${Math.round(settings.zoom * 100)}%`;
     }
 
@@ -325,6 +331,7 @@
     startAtLogin.addEventListener('change', () => changeSetting('startAtLogin', startAtLogin.checked));
     startMinimized.addEventListener('change', () => changeSetting('startMinimized', startMinimized.checked));
     notifications.addEventListener('change', () => changeSetting('notifications', notifications.checked));
+    externalLinks.addEventListener('change', () => changeSetting('openExternalInBrowser', externalLinks.checked));
     zoomOut.addEventListener('click', () => stepZoom(-0.1));
     zoomIn.addEventListener('click', () => stepZoom(0.1));
     checkNow.addEventListener('click', () => checkUpdates(true));
