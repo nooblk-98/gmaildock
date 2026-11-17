@@ -40,6 +40,23 @@
     if (window !== window.top) return;
     if (location.hostname !== 'mail.google.com') return;
 
+    let unreadCount;
+    function syncUnreadCount() {
+      const inbox = document.querySelector('a[href$="#inbox"]');
+      const inboxLabel = inbox && `${inbox.getAttribute('aria-label') || ''} ${inbox.textContent || ''}`;
+      const inboxMatch = inboxLabel && /(?:^|\D)(\d[\d,]*)/.exec(inboxLabel);
+      const titleMatch = /^.{0,24}?\(([\d,]+)\)(?:\s|$)/.exec(document.title);
+      const count = Number((inboxMatch?.[1] || titleMatch?.[1] || '0').replaceAll(',', ''));
+      if (!Number.isSafeInteger(count) || count === unreadCount) return;
+      unreadCount = count;
+      window.__TAURI__.core.invoke('set_unread_count', { count }).catch((error) => {
+        console.warn('Could not set GmailDock unread badge:', error);
+      });
+    }
+    new MutationObserver(syncUnreadCount).observe(document.head, { childList: true, characterData: true, subtree: true });
+    syncUnreadCount();
+    setInterval(syncUnreadCount, 15000);
+
     const make = (tag, text) => {
       const element = document.createElement(tag);
       if (text) element.textContent = text;
@@ -59,7 +76,7 @@
 
     const updateButton = make('button');
     stylePill(updateButton);
-    Object.assign(updateButton.style, { display: 'none', background: '#d6f4e9', borderColor: '#b6e6d3' });
+    updateButton.style.display = 'none';
     const settingsButton = make('button', '⚙ Settings');
     stylePill(settingsButton);
     settingsButton.setAttribute('aria-label', 'GmailDock settings');
@@ -171,7 +188,7 @@
     closeToTray.addEventListener('change', () => changeSetting('closeToTray', closeToTray.checked));
     checkNow.addEventListener('click', () => checkUpdates(true));
     updateButton.addEventListener('click', async () => {
-      if (!availableVersion || !confirm(`Install GmailDock v${availableVersion} now?`)) return;
+      if (!availableVersion) return;
       updateButton.disabled = true;
       updateButton.textContent = 'Installing update…';
       try {
@@ -180,6 +197,7 @@
         updateButton.disabled = false;
         updateButton.textContent = 'Update failed — retry';
         status.textContent = `Could not install update: ${error}`;
+        setPanelOpen(true);
       }
     });
 

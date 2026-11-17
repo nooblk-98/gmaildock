@@ -20,6 +20,7 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 - Has an in-app Settings button for automatic update checks and close behavior. It always hides the Google Account shortcut and Google apps launcher.
 - Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; use the tray menu to show or quit the app.
 - Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
+- Shows Gmail's unread Inbox count on the app icon using the Inbox navigation label or page title. Windows uses a taskbar badge; macOS and supported Linux desktops use their native badge count.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
