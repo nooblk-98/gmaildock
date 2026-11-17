@@ -21,9 +21,14 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 ## Features
 
+**Performance**
+- Small download: about 3 MB on Windows, 5 MB on macOS, and 7 MB for the Linux .deb and .rpm packages. The AppImage is larger because it bundles its own libraries.
+- No bundled browser engine. GmailDock uses the webview your system already has: WebView2 on Windows and WebKit on macOS and Linux. Electron apps instead ship a full copy of Chromium.
+- Lighter than running a whole browser just for Gmail: no browser toolbar, extensions, or other tabs running alongside it. The app shell around Gmail is written in Rust.
+- Gmail itself uses about the same memory as in a browser tab, because it is the same page. The savings come from everything around it.
+
 **Mail**
 - Gmail in its own desktop window on Windows, macOS, and Linux.
-- Lightweight: uses the system webview (WebView2 on Windows) instead of bundling a browser.
 - Inbox unread count on the taskbar or dock badge, in the window title, and in the tray tooltip.
 - Desktop notifications for new mail and finished downloads.
 - Add and switch between Google accounts.
