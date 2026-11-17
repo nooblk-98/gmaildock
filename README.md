@@ -3,20 +3,20 @@
 
   # GmailDock
 
-  A small Rust desktop app for the real Gmail website.
+  Fast, lightweight Gmail on your desktop.
 
   [![Build and release](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml/badge.svg)](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml)
   [![Latest release](https://img.shields.io/github/v/release/nooblk-98/gmaildock?label=release)](https://github.com/nooblk-98/gmaildock/releases)
 </div>
 
-GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. It uses Gmail's own interface, so there is no Gmail API setup or OAuth client ID. The current app window and installer are named **RustGmail**.
+GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. Its small Rust and Tauri shell is designed for fast startup and low app overhead while keeping Gmail's own interface. There is no Gmail API setup or OAuth client ID. The current app window and installer are named **RustGmail**.
 
 Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 ## Features
 
 - Gmail in a dedicated desktop window on Windows, macOS, and Linux.
-- Uses the system webview instead of bundling a browser engine. Windows uses WebView2.
+- Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
 - Hides the “Manage your Google Account” link from Gmail's account menu.
 - Checks for updates in the background every 30 minutes. An install button appears only when an update is available.
 
