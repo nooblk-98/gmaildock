@@ -17,8 +17,8 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 - Gmail in a dedicated desktop window on Windows, macOS, and Linux.
 - Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
-- Hides the “Manage your Google Account” link from Gmail's account menu.
-- Checks for updates in the background every 30 minutes. An install button appears only when an update is available.
+- Has an in-app Settings button for automatic update checks and the account-menu adjustment.
+- Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
