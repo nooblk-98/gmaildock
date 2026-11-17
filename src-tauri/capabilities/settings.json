@@ -1,0 +1,6 @@
+{
+  "identifier": "settings",
+  "description": "Local settings window",
+  "windows": ["settings"],
+  "permissions": ["core:default"]
+}

@@ -16,14 +16,24 @@ npm run dev
 ## Before opening a pull request
 
 ```sh
-npm run check                                   # regression checks (unread badge, count parsing, injected UI)
+npm run check                                   # regression checks, injected UI, settings UI
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI runs the same checks. The UI injected into Gmail lives in `src-tauri/src/injected.js`; the native side is split by concern in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `updater.rs`, and `downloads.rs`).
+CI runs the same checks. The native side lives in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `settings_window.rs`, `updater.rs`, and `downloads.rs`). The Settings window is plain HTML, CSS, and JavaScript in `frontend/`; the small script injected into Gmail is `src-tauri/src/injected.js`.
+
+## Signing and notarization
+
+Release builds are unsigned unless the repository provides signing secrets. Windows installers then trigger SmartScreen, and macOS refuses to open an unsigned download until the quarantine flag is removed.
+
+To sign:
+
+- **macOS:** set `APPLE_CERTIFICATE`, `APPLE_CERTIFICATE_PASSWORD`, `APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, and `APPLE_TEAM_ID`.
+- **Windows:** set `TAURI_SIGNING_PRIVATE_KEY` and `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` for the updater, and use a code-signing certificate with the Tauri `certificateThumbprint` settings.
+- **Updater:** `TAURI_SIGNING_PRIVATE_KEY` is required for every release; `latest.json` is verified before the release is published.
 
 ## Cutting a release (maintainers)
 

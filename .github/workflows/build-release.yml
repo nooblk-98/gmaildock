@@ -181,6 +181,23 @@ jobs:
     permissions:
       contents: write
     steps:
+      - name: Validate the updater manifest
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release download "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+            --pattern latest.json --dir "$RUNNER_TEMP/updater" --clobber
+          node -e '
+            const fs = require("node:fs");
+            const manifest = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+            const expected = ["windows-x86_64", "windows-aarch64", "darwin-x86_64", "darwin-aarch64", "linux-x86_64", "linux-aarch64"];
+            const missing = expected.filter((platform) => !manifest.platforms?.[platform]);
+            if (missing.length > 0) {
+              console.error("latest.json is missing: " + missing.join(", "));
+              process.exit(1);
+            }
+            console.log("latest.json covers every supported platform");
+          ' "$RUNNER_TEMP/updater/latest.json"
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

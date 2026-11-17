@@ -6,7 +6,7 @@ use tauri::{
     AppHandle, Manager,
 };
 
-use crate::window;
+use crate::{settings_window, window};
 
 pub const TRAY_ID: &str = "gmaildock";
 
@@ -61,7 +61,11 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                 }
             }
         }
-        "settings" => window::open_settings(app),
+        "settings" => {
+            if let Err(error) = settings_window::open(app) {
+                log::warn!("could not open the settings window: {error}");
+            }
+        }
         "browser" => open_in_browser(),
         "reload" => {
             if let Some(window) = window::show_main_window(app) {

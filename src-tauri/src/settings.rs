@@ -8,15 +8,20 @@ use std::{
 use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Manager, State};
 
-pub const SETTINGS_FILE: &str = "settings.json";
+use crate::shortcut;
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Serialize)]
+pub const SETTINGS_FILE: &str = "settings.json";
+pub const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+G";
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 pub struct AppSettings {
     pub auto_check_updates: bool,
     pub close_to_tray: bool,
     pub notifications: bool,
     pub open_external_in_browser: bool,
+    pub shortcut: Option<String>,
+    pub skipped_version: Option<String>,
     pub start_at_login: bool,
     pub start_minimized: bool,
     pub zoom: f64,
@@ -29,6 +34,8 @@ impl Default for AppSettings {
             close_to_tray: true,
             notifications: true,
             open_external_in_browser: true,
+            shortcut: Some(DEFAULT_SHORTCUT.to_owned()),
+            skipped_version: None,
             start_at_login: true,
             start_minimized: false,
             zoom: 1.0,
@@ -65,10 +72,10 @@ impl SettingsStore {
     }
 
     pub fn snapshot(&self) -> AppSettings {
-        *self
-            .current
+        self.current
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
 
     pub fn save(&self, settings: AppSettings) -> io::Result<AppSettings> {
@@ -79,7 +86,7 @@ impl SettingsStore {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
         write_settings(&self.path, &next)?;
-        *current = next;
+        *current = next.clone();
         Ok(next)
     }
 }
@@ -138,11 +145,28 @@ pub fn save_settings(
     store: State<'_, SettingsStore>,
     settings: AppSettings,
 ) -> Result<AppSettings, String> {
-    let saved = store
-        .save(settings)
-        .map_err(|error| format!("could not save settings: {error}"))?;
+    let previous = store.snapshot();
+    let shortcut_changed = previous.shortcut != settings.shortcut;
 
-    if let Some(window) = app.get_webview_window("main") {
+    if shortcut_changed {
+        shortcut::apply(
+            &app,
+            previous.shortcut.as_deref(),
+            settings.shortcut.as_deref(),
+        )?;
+    }
+
+    let saved = match store.save(settings) {
+        Ok(saved) => saved,
+        Err(error) => {
+            if shortcut_changed {
+                let _ = shortcut::register(&app, previous.shortcut.as_deref());
+            }
+            return Err(format!("could not save settings: {error}"));
+        }
+    };
+
+    if let Some(window) = app.get_webview_window(crate::window::LABEL) {
         if let Err(error) = window.set_zoom(saved.zoom) {
             log::warn!("could not apply zoom: {error}");
         }
@@ -196,6 +220,7 @@ mod tests {
         let saved = store(&dir)
             .save(AppSettings {
                 notifications: false,
+                skipped_version: Some("9.9.9".to_owned()),
                 zoom: 1.25,
                 ..AppSettings::default()
             })
@@ -282,6 +307,8 @@ mod tests {
         assert!(settings.open_external_in_browser);
         assert!(settings.start_at_login);
         assert!(settings.notifications);
+        assert_eq!(settings.shortcut.as_deref(), Some(DEFAULT_SHORTCUT));
+        assert_eq!(settings.skipped_version, None);
         assert_eq!(settings.zoom, 1.0);
     }
 }
