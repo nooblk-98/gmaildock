@@ -138,16 +138,33 @@ pub fn is_google_popup(url: &tauri::Url) -> bool {
 }
 
 fn is_google_host(host: &str) -> bool {
-    host == "google.com"
-        || host.ends_with(".google.com")
-        || host == "accounts.youtube.com"
+    host == "accounts.youtube.com"
         || host.ends_with(".googleusercontent.com")
+        || is_google_domain(host)
+}
+
+/// Matches google.com and Google's country domains (google.lk, google.co.uk, google.com.au, ...)
+/// plus their subdomains. Sign-in redirects through accounts.google.<country>/accounts/SetSID.
+fn is_google_domain(host: &str) -> bool {
+    let labels: Vec<&str> = host.split('.').collect();
+    let Some(index) = labels.iter().rposition(|label| *label == "google") else {
+        return false;
+    };
+    let is_country =
+        |label: &str| label.len() == 2 && label.bytes().all(|b| b.is_ascii_lowercase());
+    match &labels[index + 1..] {
+        ["com"] => true,
+        [country] => is_country(country),
+        ["com" | "co", country] => is_country(country),
+        _ => false,
+    }
 }
 
 fn open_externally(url: &tauri::Url) {
     if !matches!(url.scheme(), "http" | "https") {
         return;
     }
+    log::info!("opening in the browser: {url}");
     if let Err(error) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
         log::warn!("could not open {url} in the browser: {error}");
     }
@@ -184,6 +201,32 @@ mod tests {
             &url("https://accounts.youtube.com/accounts/CheckConnection"),
             true
         ));
+    }
+
+    #[test]
+    fn google_country_domains_stay_in_the_app() {
+        for raw in [
+            "https://accounts.google.lk/accounts/SetSID",
+            "https://www.google.co.uk/",
+            "https://accounts.google.com.au/accounts/SetSID",
+            "https://google.de/",
+        ] {
+            assert!(allow_in_app(&url(raw), true), "{raw}");
+            assert!(is_google_popup(&url(raw)), "{raw}");
+        }
+    }
+
+    #[test]
+    fn lookalike_hosts_are_not_google() {
+        for raw in [
+            "https://google.evil.com/",
+            "https://notgoogle.com/",
+            "https://google.com.evil.net/",
+            "https://google.example/",
+            "https://accounts.google.co.uk.evil.com/",
+        ] {
+            assert!(!allow_in_app(&url(raw), true), "{raw}");
+        }
     }
 
     #[test]

@@ -7,6 +7,12 @@
 
   [![Build and release](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml/badge.svg)](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml)
   [![Latest release](https://img.shields.io/github/v/release/nooblk-98/gmaildock?label=release)](https://github.com/nooblk-98/gmaildock/releases)
+  [![Downloads](https://img.shields.io/github/downloads/nooblk-98/gmaildock/total)](https://github.com/nooblk-98/gmaildock/releases)
+  [![License: MIT](https://img.shields.io/github/license/nooblk-98/gmaildock)](LICENSE)
+
+  [![Rust](https://img.shields.io/badge/Rust-2021-CE422B?logo=rust&logoColor=white)](https://www.rust-lang.org/)
+  [![Tauri](https://img.shields.io/badge/Tauri-2-24C8DB?logo=tauri&logoColor=white)](https://tauri.app/)
+  [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)](https://github.com/nooblk-98/gmaildock/releases)
 </div>
 
 GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. Its small Rust and Tauri shell is designed for fast startup and low app overhead while keeping Gmail's own interface. There is no Gmail API setup or OAuth client ID.
@@ -15,25 +21,24 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 ## Features
 
-- Gmail in a dedicated desktop window on Windows, macOS, and Linux.
-- Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
-- Has a native Settings window (tray menu, Settings, or `gmaildock --settings`) for updates, startup, notifications, link handling, zoom, and the global shortcut. It always hides the Google Account shortcut and Google apps launcher.
-- Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; left-click the tray icon to open Gmail, or right-click for Accounts, Settings, Open in browser, Reload, Troubleshooting, and Quit.
-- Opening GmailDock again focuses the running window instead of creating another tray icon.
-- Keeps non-Google links out of the app window: they open in your default browser. Turn this off in Settings if a sign-in flow needs to stay inside GmailDock.
-- Shows a notification when a download finishes.
-- Writes a log file; open it from the tray (Troubleshooting, Open logs folder) when reporting a problem.
-- Remembers the window size, position, and zoom level between launches.
-- Checks for updates in the background every 30 minutes when enabled. Settings shows the release notes, download progress, and a Skip this version button.
-- Shows release notes and an Update now button in Settings when an update is available.
-- Can start automatically when you sign in; this is on by default and can be changed in Settings.
-- Settings includes an About section with the developer profile and source repository.
-- Supports Google account popups used by Gmail's Add another account action.
-- Shows your Inbox unread count as a taskbar or dock badge, in the window title, and in the tray tooltip. Other mailboxes never change it.
-- Optional desktop notifications when new mail arrives while the window is not focused.
-- Press Ctrl+Shift+G (Cmd+Shift+G on macOS) to show or hide the window from anywhere. Change or disable it in Settings.
-- Gmail's own theme controls light and dark mode; the Settings window follows your system theme.
-- Can start minimized to the tray when launched at login.
+**Mail**
+- Gmail in its own desktop window on Windows, macOS, and Linux.
+- Lightweight: uses the system webview (WebView2 on Windows) instead of bundling a browser.
+- Inbox unread count on the taskbar or dock badge, in the window title, and in the tray tooltip.
+- Desktop notifications for new mail and finished downloads.
+- Add and switch between Google accounts.
+
+**Desktop**
+- Runs in the system tray. Left-click opens Gmail; right-click gives Accounts, Settings, Open in browser, Reload, Troubleshooting, and Quit.
+- Global shortcut to show or hide the window: Ctrl+Shift+G (Cmd+Shift+G on macOS) by default.
+- Starts at login, optionally minimized to the tray.
+- Remembers window size, position, and zoom.
+- Opens non-Google links in your default browser.
+
+**Settings and updates**
+- Native Settings window, opened from the tray or with `gmaildock --settings`, that follows your system light or dark theme.
+- Checks for updates in the background. Install from Settings with release notes and download progress, or skip a version.
+- Log file for troubleshooting, opened from the tray under Troubleshooting.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
