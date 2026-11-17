@@ -38,11 +38,13 @@ To sign:
 ## Cutting a release (maintainers)
 
 ```sh
-npm run release -- 0.2.5          # bumps every version file and drafts release notes from commits
-# edit .github/release-notes/v0.2.5.md, then:
-git add -A && git commit -m "Prepare v0.2.5" && git tag v0.2.5 && git push origin HEAD v0.2.5
+npm run release -- 0.3.4          # bumps every version file and drafts release notes from commits
+# edit .github/release-notes/v0.3.4.md, then:
+git add -A && git commit -m "Prepare v0.3.4" && git tag v0.3.4 && git push origin HEAD v0.3.4
 ```
 
-`npm run release -- 0.2.5 --push` does the commit, tag and push for you using the drafted notes. The script needs a clean working tree.
+`npm run release -- 0.3.4 --push` does the commit, tag and push for you using the drafted notes. The script needs a clean working tree.
 
 The tag push builds all platforms, creates one draft release, and publishes it when every build succeeds.
+
+Use `npm run release -- 0.3.4 --dry-run` to inspect the release action without changing files.

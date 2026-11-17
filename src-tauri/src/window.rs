@@ -139,25 +139,30 @@ pub fn is_google_popup(url: &tauri::Url) -> bool {
 
 fn is_google_host(host: &str) -> bool {
     host == "accounts.youtube.com"
-        || host.ends_with(".googleusercontent.com")
+        || matches!(
+            host,
+            "mail.googleusercontent.com"
+                | "docs.googleusercontent.com"
+                | "lh3.googleusercontent.com"
+                | "lh4.googleusercontent.com"
+                | "lh5.googleusercontent.com"
+                | "lh6.googleusercontent.com"
+        )
         || is_google_domain(host)
 }
 
 /// Matches google.com and Google's country domains (google.lk, google.co.uk, google.com.au, ...)
 /// plus their subdomains. Sign-in redirects through accounts.google.<country>/accounts/SetSID.
 fn is_google_domain(host: &str) -> bool {
-    let labels: Vec<&str> = host.split('.').collect();
-    let Some(index) = labels.iter().rposition(|label| *label == "google") else {
-        return false;
-    };
-    let is_country =
-        |label: &str| label.len() == 2 && label.bytes().all(|b| b.is_ascii_lowercase());
-    match &labels[index + 1..] {
-        ["com"] => true,
-        [country] => is_country(country),
-        ["com" | "co", country] => is_country(country),
-        _ => false,
-    }
+    include_str!("google-domains.txt")
+        .lines()
+        .filter(|domain| !domain.starts_with('#') && !domain.is_empty())
+        .any(|domain| {
+            host == domain
+                || host
+                    .strip_suffix(domain)
+                    .is_some_and(|prefix| prefix.ends_with('.'))
+        })
 }
 
 fn open_externally(url: &tauri::Url) {
@@ -220,6 +225,9 @@ mod tests {
     fn lookalike_hosts_are_not_google() {
         for raw in [
             "https://google.evil.com/",
+            "https://google.com.de/",
+            "https://google.co.io/",
+            "https://untrusted.googleusercontent.com/",
             "https://notgoogle.com/",
             "https://google.com.evil.net/",
             "https://google.example/",

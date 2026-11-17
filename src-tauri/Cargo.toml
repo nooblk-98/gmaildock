@@ -2,6 +2,10 @@
 name = "gmaildock"
 version = "0.3.3"
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/nooblk-98/gmaildock"
+description = "A lightweight Gmail desktop wrapper"
+rust-version = "1.90"
 
 [dev-dependencies]
 tempfile = "3"

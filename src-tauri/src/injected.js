@@ -33,8 +33,15 @@
     let missingSince;
     // <unread-parse>
     function parseInboxCount(text) {
-      const match = /(?:^|\D)(\d[\d,]*)/.exec(text || '');
-      return match ? Number(match[1].replaceAll(',', '')) : 0;
+      // Decimal digit blocks contain consecutive groups of ten code points.
+      const normalized = String(text || '').replace(/\p{Nd}/gu, (digit) => {
+        const code = digit.codePointAt(0);
+        let start = code;
+        while (start > 0 && /\p{Nd}/u.test(String.fromCodePoint(start - 1))) start--;
+        return String((code - start) % 10);
+      });
+      const match = /[0-9](?:[0-9,\u066c\u00a0\u202f]*[0-9])?/.exec(normalized);
+      return match ? Number(match[0].replace(/[^0-9]/g, '')) : 0;
     }
     // </unread-parse>
     function findInboxLink() {

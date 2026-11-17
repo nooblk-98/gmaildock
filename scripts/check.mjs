@@ -24,6 +24,10 @@ const cases = [
   ['', 0],
   [undefined, 0],
   ['Inbox 7', 7],
+  ['البريد ١٬٢٣٤', 1234],
+  ['Inbox १२३', 123],
+  ['Inbox １２３', 123],
+  ['Inbox 1\u202f234', 1234],
 ];
 for (const [text, expected] of cases) {
   assert.equal(parseInboxCount(text), expected, `parseInboxCount(${JSON.stringify(text)})`);
@@ -35,3 +39,10 @@ assert(/set_unread_count/.test(injected), 'injected.js no longer reports the unr
 assert(!/document\.title/.test(injected), 'badge must not read document.title (it follows the open mailbox)');
 
 console.log('checks passed');
+
+const capability = JSON.parse(readFileSync(new URL('../src-tauri/capabilities/gmail.json', import.meta.url)));
+assert.deepEqual(capability.permissions, ['allow-set-unread-count']);
+assert.deepEqual(capability.remote.urls, ['https://mail.google.com/*']);
+assert.deepEqual(capability.windows, ['main']);
+const build = readFileSync(new URL('../src-tauri/build.rs', import.meta.url), 'utf8');
+assert(build.includes('set_unread_count'), 'app command ACL must be enabled');

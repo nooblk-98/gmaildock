@@ -35,7 +35,7 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 - Gmail in its own desktop window on Windows, macOS, and Linux.
 - Inbox unread count on the taskbar or dock badge, in the window title, and in the tray tooltip.
 - Desktop notifications for new mail and finished downloads.
-- Add and switch between Google accounts.
+- Add and switch between Google accounts using Google’s account chooser (shared browser session).
 
 **Desktop**
 - Runs in the system tray. Left-click opens Gmail; right-click for accounts, settings, updates, and Quit.
@@ -81,7 +81,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the release proces
 
 The [release workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux packages. A version tag creates a signed release and `latest.json` for the in-app updater. The updater checks this repository's [latest release](https://github.com/nooblk-98/gmaildock/releases/latest).
 
-Maintainers: run `npm run release -- X.Y.Z` to bump every version file and draft `.github/release-notes/vX.Y.Z.md` from commit messages, edit the notes, then commit and push a matching tag (or add `--push`). The notes are included in the release and in-app update dialog. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
+Maintainers: run `npm run release -- X.Y.Z` to bump every version file and draft `.github/release-notes/vX.Y.Z.md` from commit messages, edit the notes, then commit and push a matching tag (or add `--push`). The notes are included in the release and updater manifest. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
 
 ## Privacy
 
@@ -90,3 +90,15 @@ GmailDock only wraps the Gmail website. It does not read, upload, or store your 
 ## About this project
 
 GmailDock is an independent, unofficial wrapper. It is not affiliated with or endorsed by Google. The icon adapts Google's [Gmail artwork](https://knowledge.workspace.google.com/admin/getting-started/brand-your-internal-communications-with-google-workspace). The account-menu adjustment depends on Google's page markup and may need changes when Gmail updates its interface.
+
+### Platform troubleshooting
+
+Builds currently have no paid OS code signing or Apple notarization. Download only from this repository. On macOS, use System Settings → Privacy & Security → Open Anyway if Gatekeeper blocks a trusted download. On Windows, an unsigned build may trigger SmartScreen.
+
+GNOME may need an AppIndicator extension to display the tray. Linux dock badges require a desktop that supports the Unity launcher API; a window title and tray tooltip also show unread counts. Global shortcuts can fail on Wayland or when another application reserves the keys. Preferences shows registration errors and accepts a custom shortcut.
+
+Open Preferences from the application menu (`Ctrl+,` / `Cmd+,`) or tray. Diagnostics can be selected and copied there; resetting preferences keeps your Google session. After denying notifications, enable GmailDock in your OS notification settings. The desktop notification plugin cannot reliably report OS denial.
+
+Before uninstalling, turn off **Start at login** in Preferences. Removing a macOS app by dragging it to Trash does not run an uninstall hook. If already removed, delete its GmailDock LaunchAgent in `~/Library/LaunchAgents`; on Linux remove its GmailDock entry in `~/.config/autostart`. On Windows disable its entry in Startup Apps.
+
+Downloads finish with a notification even when WebKit omits the destination. **Troubleshooting → Open Downloads folder** reveals the latest downloaded file when available.

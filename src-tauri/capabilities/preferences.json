@@ -1,0 +1,10 @@
+{
+  "identifier": "preferences",
+  "windows": [
+    "preferences"
+  ],
+  "permissions": [
+    "allow-get-preferences",
+    "allow-save-preferences"
+  ]
+}

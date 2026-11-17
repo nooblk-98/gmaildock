@@ -138,7 +138,8 @@ fn write_settings(path: &Path, settings: &AppSettings) -> io::Result<()> {
 pub fn apply(app: &AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
     let store = app.state::<SettingsStore>();
     let previous = store.snapshot();
-    let shortcut_changed = previous.shortcut != settings.shortcut;
+    let shortcut_changed =
+        previous.shortcut != settings.shortcut || crate::preferences::shortcut_error().is_some();
 
     if shortcut_changed {
         shortcut::apply(
@@ -169,6 +170,9 @@ pub fn apply(app: &AppHandle, settings: AppSettings) -> Result<AppSettings, Stri
         log::warn!("{error}");
     }
 
+    if shortcut_changed {
+        crate::preferences::set_shortcut_error(app, None);
+    }
     tray::refresh(app);
 
     Ok(saved)
