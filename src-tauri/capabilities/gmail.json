@@ -1,1 +1,7 @@
-{"identifier":"gmail","description":"Update controls for the Gmail window","windows":["main"],"remote":{"urls":["https://mail.google.com/*"]},"permissions":[]}
+{
+  "identifier": "gmail",
+  "description": "Gmail may only report its unread count",
+  "windows": ["main"],
+  "remote": { "urls": ["https://mail.google.com/*"] },
+  "permissions": ["allow-set-unread-count"]
+}
