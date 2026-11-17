@@ -6,12 +6,9 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Manager};
 
 use crate::{shortcut, tray};
-
-/// Sent to every window after settings change, so the Settings window and tray stay in sync.
-pub const CHANGED_EVENT: &str = "settings-changed";
 
 pub const SETTINGS_FILE: &str = "settings.json";
 pub const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+G";
@@ -137,17 +134,7 @@ fn write_settings(path: &Path, settings: &AppSettings) -> io::Result<()> {
     fs::rename(temporary, path)
 }
 
-#[tauri::command]
-pub fn get_settings(store: State<'_, SettingsStore>) -> AppSettings {
-    store.snapshot()
-}
-
-#[tauri::command]
-pub fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
-    apply(&app, settings)
-}
-
-/// Saves settings and applies their side effects. Used by the Settings window and the tray menu.
+/// Saves settings and applies their side effects (shortcut, zoom, autostart, tray menu).
 pub fn apply(app: &AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
     let store = app.state::<SettingsStore>();
     let previous = store.snapshot();
@@ -167,7 +154,6 @@ pub fn apply(app: &AppHandle, settings: AppSettings) -> Result<AppSettings, Stri
             if shortcut_changed {
                 let _ = shortcut::register(app, previous.shortcut.as_deref());
             }
-            tray::sync(app, &previous);
             return Err(format!("could not save settings: {error}"));
         }
     };
@@ -183,10 +169,7 @@ pub fn apply(app: &AppHandle, settings: AppSettings) -> Result<AppSettings, Stri
         log::warn!("{error}");
     }
 
-    tray::sync(app, &saved);
-    if let Err(error) = app.emit(CHANGED_EVENT, saved.clone()) {
-        log::warn!("could not announce the settings change: {error}");
-    }
+    tray::refresh(app);
 
     Ok(saved)
 }

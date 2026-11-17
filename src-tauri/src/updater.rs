@@ -1,117 +1,63 @@
-use std::{sync::Mutex, time::Duration};
+//! Background update checks and tray-driven installs.
 
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_notification::NotificationExt;
+use std::{
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Mutex,
+    },
+    time::Duration,
+};
+
+use tauri::{AppHandle, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
-use crate::settings::SettingsStore;
+use crate::{
+    badge,
+    settings::{self, SettingsStore},
+    tray,
+};
 
 const FIRST_CHECK_DELAY: Duration = Duration::from_secs(10);
 const CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
-#[derive(Clone, Serialize)]
-pub struct AvailableUpdate {
-    pub version: String,
-    notes: Option<String>,
+#[derive(Default)]
+pub struct UpdateState {
+    available: Mutex<Option<String>>,
+    installing: AtomicBool,
 }
 
-#[derive(Default)]
-pub struct UpdateState(Mutex<Option<AvailableUpdate>>);
-
 impl UpdateState {
-    fn cached(&self) -> Option<AvailableUpdate> {
-        self.0
+    fn available(&self) -> Option<String> {
+        self.available
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
             .clone()
     }
 
-    fn store(&self, update: Option<AvailableUpdate>) {
-        *self
-            .0
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner()) = update;
-    }
-}
-
-#[derive(Clone, Serialize)]
-struct UpdateProgress {
-    chunk: usize,
-    total: Option<u64>,
-}
-
-#[tauri::command]
-pub async fn check_for_updates(app: AppHandle) -> Result<Option<AvailableUpdate>, String> {
-    refresh(&app).await
-}
-
-/// Checks for an update, caches the result and announces it to open windows.
-pub async fn refresh(app: &AppHandle) -> Result<Option<AvailableUpdate>, String> {
-    let update = lookup(app).await?;
-    app.state::<UpdateState>().store(update.clone());
-
-    if let Some(update) = &update {
-        if let Err(error) = app.emit("update-available", update.clone()) {
-            log::warn!("could not announce the available update: {error}");
-        }
-    }
-
-    Ok(update)
-}
-
-#[tauri::command]
-pub fn get_update_state(state: State<'_, UpdateState>) -> Option<AvailableUpdate> {
-    state.cached()
-}
-
-#[tauri::command]
-pub async fn install_update(app: AppHandle) -> Result<(), String> {
-    let update = app
-        .updater()
-        .map_err(|error| error.to_string())?
-        .check()
-        .await
-        .map_err(|error| error.to_string())?
-        .ok_or("No update is available")?;
-
-    let progress_app = app.clone();
-    update
-        .download_and_install(
-            move |chunk, total| {
-                let _ = progress_app.emit("update-progress", UpdateProgress { chunk, total });
-            },
-            || {},
+    /// Stores the latest known version and returns the previous one.
+    fn store(&self, version: Option<String>) -> Option<String> {
+        std::mem::replace(
+            &mut *self
+                .available
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner()),
+            version,
         )
-        .await
-        .map_err(|error| error.to_string())?;
-
-    log::info!("update installed; restarting GmailDock");
-    app.restart();
+    }
 }
 
-#[tauri::command]
-pub fn get_app_version(app: AppHandle) -> String {
-    app.package_info().version.to_string()
+/// What the tray menu needs to know about updates.
+pub struct UpdateStatus {
+    pub available: Option<String>,
+    pub installing: bool,
 }
 
-const DEVELOPER_URL: &str = "https://github.com/nooblk-98";
-const REPOSITORY_URL: &str = "https://github.com/nooblk-98/gmaildock";
-
-#[derive(Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum AboutLink {
-    Developer,
-    Repository,
-}
-
-#[tauri::command]
-pub fn open_about_link(link: AboutLink) -> Result<(), String> {
-    let url = match link {
-        AboutLink::Developer => DEVELOPER_URL,
-        AboutLink::Repository => REPOSITORY_URL,
-    };
-    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|error| error.to_string())
+pub fn status(app: &AppHandle) -> UpdateStatus {
+    let state = app.state::<UpdateState>();
+    UpdateStatus {
+        available: state.available(),
+        installing: state.installing.load(Ordering::Relaxed),
+    }
 }
 
 pub fn spawn_background_checks(app: AppHandle) {
@@ -127,80 +73,151 @@ pub fn spawn_background_checks(app: AppHandle) {
 }
 
 fn check_in_background(app: &AppHandle) {
-    let update = match tauri::async_runtime::block_on(lookup(app)) {
-        Ok(update) => update,
+    let version = match tauri::async_runtime::block_on(lookup(app)) {
+        Ok(version) => version,
         Err(error) => {
             log::warn!("could not check for updates: {error}");
             return;
         }
     };
 
-    let previous = app.state::<UpdateState>().cached();
-    app.state::<UpdateState>().store(update.clone());
+    let previous = app.state::<UpdateState>().store(version.clone());
+    if previous != version {
+        tray::refresh(app);
+    }
 
-    let settings = app.state::<SettingsStore>().snapshot();
-    let Some(update) = update else {
+    let Some(version) = version else {
         return;
     };
-    if settings.skipped_version.as_deref() == Some(update.version.as_str()) {
+    let settings = app.state::<SettingsStore>().snapshot();
+    if settings.skipped_version.as_deref() == Some(version.as_str()) {
         return;
     }
-
-    if let Err(error) = app.emit("update-available", update.clone()) {
-        log::warn!("could not announce the available update: {error}");
-    }
-
-    let already_announced = previous
-        .map(|known| known.version == update.version)
-        .unwrap_or(false);
-    if !already_announced && settings.notifications {
-        notify(app, &update);
+    if previous.as_deref() != Some(version.as_str()) && settings.notifications {
+        announce(app, &version);
     }
 }
 
-/// Tray "Check for updates": opens Settings when an update exists, otherwise reports the result.
+fn announce(app: &AppHandle, version: &str) {
+    tray::notify(
+        app,
+        "GmailDock update available",
+        &format!(
+            "Version {version} is ready. Right-click the GmailDock tray icon and choose Install update."
+        ),
+    );
+}
+
+/// Tray "Check for updates". Asking explicitly also brings back a version that was skipped.
 pub fn check_from_tray(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
-        match refresh(&app).await {
-            Ok(Some(update)) => {
-                log::info!("update {} is available", update.version);
-                if let Err(error) = crate::settings_window::open(&app) {
-                    log::warn!("could not open the settings window: {error}");
+        match lookup(&app).await {
+            Ok(Some(version)) => {
+                log::info!("update {version} is available");
+                app.state::<UpdateState>().store(Some(version.clone()));
+                let mut current = app.state::<SettingsStore>().snapshot();
+                if current.skipped_version.as_deref() == Some(version.as_str()) {
+                    current.skipped_version = None;
+                    if let Err(error) = settings::apply(&app, current) {
+                        log::warn!("could not clear the skipped version: {error}");
+                    }
                 }
+                tray::refresh(&app);
+                announce(&app, &version);
             }
-            Ok(None) => show(
-                &app,
-                "GmailDock is up to date",
-                "You have the latest version.",
-            ),
+            Ok(None) => {
+                app.state::<UpdateState>().store(None);
+                tray::refresh(&app);
+                tray::notify(
+                    &app,
+                    "GmailDock is up to date",
+                    &format!(
+                        "You have the latest version, {}.",
+                        app.package_info().version
+                    ),
+                );
+            }
             Err(error) => {
                 log::warn!("could not check for updates: {error}");
-                show(&app, "Update check failed", "See the log file for details.");
+                tray::notify(&app, "Update check failed", "See the log file for details.");
             }
         }
     });
 }
 
-fn show(app: &AppHandle, title: &str, body: &str) {
-    if let Err(error) = app.notification().builder().title(title).body(body).show() {
-        log::warn!("could not show a notification: {error}");
+/// Tray "Install update": downloads with progress in the tray tooltip, then restarts.
+pub fn install_from_tray(app: AppHandle) {
+    if app
+        .state::<UpdateState>()
+        .installing
+        .swap(true, Ordering::Relaxed)
+    {
+        return;
     }
+    tray::refresh(&app);
+
+    tauri::async_runtime::spawn(async move {
+        if let Err(error) = install(&app).await {
+            log::warn!("could not install the update: {error}");
+            app.state::<UpdateState>()
+                .installing
+                .store(false, Ordering::Relaxed);
+            tray::refresh(&app);
+            badge::restore_tooltip(&app);
+            tray::notify(&app, "Update failed", &error);
+        }
+    });
 }
 
-fn notify(app: &AppHandle, update: &AvailableUpdate) {
-    let shown = app
-        .notification()
-        .builder()
-        .title("GmailDock update available")
-        .body(format!("Version {} is ready to install.", update.version))
-        .show();
+async fn install(app: &AppHandle) -> Result<(), String> {
+    let update = app
+        .updater()
+        .map_err(|error| error.to_string())?
+        .check()
+        .await
+        .map_err(|error| error.to_string())?
+        .ok_or("No update is available.")?;
 
-    if let Err(error) = shown {
-        log::warn!("could not show the update notification: {error}");
-    }
+    tray::notify(
+        app,
+        "Updating GmailDock",
+        &format!(
+            "Downloading version {}. GmailDock restarts when it is done.",
+            update.version
+        ),
+    );
+
+    let progress_app = app.clone();
+    let mut downloaded: u64 = 0;
+    let mut shown_percent = None;
+    update
+        .download_and_install(
+            move |chunk, total| {
+                downloaded += chunk as u64;
+                let Some(total) = total.filter(|total| *total > 0) else {
+                    return;
+                };
+                let percent = (downloaded * 100 / total).min(100);
+                // Only touch the tooltip when the visible number changes.
+                if shown_percent != Some(percent) {
+                    shown_percent = Some(percent);
+                    if let Some(tray) = progress_app.tray_by_id(tray::TRAY_ID) {
+                        let _ = tray.set_tooltip(Some(format!(
+                            "GmailDock — downloading update {percent}%"
+                        )));
+                    }
+                }
+            },
+            || {},
+        )
+        .await
+        .map_err(|error| error.to_string())?;
+
+    log::info!("update installed; restarting GmailDock");
+    app.restart();
 }
 
-async fn lookup(app: &AppHandle) -> Result<Option<AvailableUpdate>, String> {
+async fn lookup(app: &AppHandle) -> Result<Option<String>, String> {
     let update = app
         .updater()
         .map_err(|error| error.to_string())?
@@ -208,8 +225,5 @@ async fn lookup(app: &AppHandle) -> Result<Option<AvailableUpdate>, String> {
         .await
         .map_err(|error| error.to_string())?;
 
-    Ok(update.map(|available| AvailableUpdate {
-        version: available.version,
-        notes: available.body,
-    }))
+    Ok(update.map(|available| available.version))
 }

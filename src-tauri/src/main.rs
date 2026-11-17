@@ -3,7 +3,6 @@
 mod badge;
 mod downloads;
 mod settings;
-mod settings_window;
 mod shortcut;
 mod tray;
 mod updater;
@@ -31,14 +30,8 @@ fn main() -> tauri::Result<()> {
                 ])
                 .build(),
         )
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _| {
-            if argv.iter().any(|arg| arg == settings_window::ARG) {
-                if let Err(error) = settings_window::open(app) {
-                    log::warn!("could not open the settings window: {error}");
-                }
-            } else {
-                let _ = window::show_main_window(app);
-            }
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            let _ = window::show_main_window(app);
         }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -84,16 +77,7 @@ fn main() -> tauri::Result<()> {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![
-            badge::set_unread_count,
-            settings::get_settings,
-            settings::save_settings,
-            updater::check_for_updates,
-            updater::get_update_state,
-            updater::install_update,
-            updater::get_app_version,
-            updater::open_about_link,
-        ])
+        .invoke_handler(tauri::generate_handler![badge::set_unread_count])
         .setup(|app| {
             log::info!("GmailDock {} starting", env!("CARGO_PKG_VERSION"));
 
@@ -116,9 +100,6 @@ fn main() -> tauri::Result<()> {
 
             tray::build(app.handle())?;
             window::create(app.handle(), settings)?;
-            if std::env::args().any(|arg| arg == settings_window::ARG) {
-                settings_window::open(app.handle())?;
-            }
             updater::spawn_background_checks(app.handle().clone());
             Ok(())
         })

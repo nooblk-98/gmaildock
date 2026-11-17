@@ -38,16 +38,18 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 - Add and switch between Google accounts.
 
 **Desktop**
-- Runs in the system tray. Left-click opens Gmail; right-click gives Accounts, Settings, Open in browser, Reload, Troubleshooting, and Quit.
+- Runs in the system tray. Left-click opens Gmail; right-click for accounts, settings, updates, and Quit.
 - Global shortcut to show or hide the window: Ctrl+Shift+G (Cmd+Shift+G on macOS) by default.
 - Starts at login, optionally minimized to the tray.
 - Remembers window size, position, and zoom.
 - Opens non-Google links in your default browser.
 
-**Settings and updates**
-- Native Settings window, opened from the tray or with `gmaildock --settings`, that follows your system light or dark theme.
-- Checks for updates in the background. Install from Settings with release notes and download progress, or skip a version.
-- Log file for troubleshooting, opened from the tray under Troubleshooting.
+**Settings and updates, all in the tray menu**
+- **Preferences**: start at login, start minimized, keep running when closed, new mail notifications, link handling, and automatic update checks.
+- **Zoom** from 50% to 200%, and a choice of **show or hide shortcut** (or off).
+- Checks for updates in the background and notifies you. **Install update** downloads it with progress in the tray tooltip, **What's new** opens the release notes, or **Skip** that version.
+- **About** opens this page, and the menu shows the installed version.
+- A log file for troubleshooting, opened from **Troubleshooting**.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.

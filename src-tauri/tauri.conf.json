@@ -3,9 +3,6 @@
   "productName": "GmailDock",
   "version": "0.3.2",
   "identifier": "app.rustgmail.desktop",
-  "build": {
-    "frontendDist": "../frontend"
-  },
   "app": {
     "withGlobalTauri": true,
     "windows": []

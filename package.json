@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
-    "check": "node scripts/check.mjs && node scripts/ui-check.mjs && node scripts/settings-check.mjs",
+    "check": "node scripts/check.mjs && node scripts/ui-check.mjs",
     "release": "node scripts/release.mjs"
   },
   "devDependencies": {

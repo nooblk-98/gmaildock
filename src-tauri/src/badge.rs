@@ -110,6 +110,14 @@ pub fn set_unread_count(
     Ok(())
 }
 
+/// Puts the unread count back in the tray tooltip, e.g. after an update download used it.
+pub fn restore_tooltip(app: &tauri::AppHandle) {
+    let count = app.state::<UnreadState>().count.load(Ordering::Relaxed);
+    if let Some(tray) = app.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some(tray_tooltip(u32::try_from(count).unwrap_or(0))));
+    }
+}
+
 /// Re-applies the last known unread count. Windows drops the taskbar overlay whenever the
 /// taskbar button is recreated (hiding to the tray, Explorer restarts, DPI changes), and Gmail
 /// only reports the count when it changes, so the window calls this when it is shown again.
