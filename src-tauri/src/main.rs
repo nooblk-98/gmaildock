@@ -63,6 +63,15 @@ fn main() -> tauri::Result<()> {
             if window.label() != window::LABEL {
                 return;
             }
+            if matches!(
+                event,
+                WindowEvent::Focused(true) | WindowEvent::ScaleFactorChanged { .. }
+            ) {
+                if let Some(webview) = window.app_handle().get_webview_window(window::LABEL) {
+                    badge::refresh(&webview);
+                }
+                return;
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let settings = window.app_handle().state::<SettingsStore>().snapshot();

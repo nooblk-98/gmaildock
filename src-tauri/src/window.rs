@@ -118,6 +118,7 @@ fn reveal(window: &WebviewWindow) {
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();
+    crate::badge::refresh(window);
 }
 
 pub fn allow_in_app(url: &tauri::Url, open_external_in_browser: bool) -> bool {
