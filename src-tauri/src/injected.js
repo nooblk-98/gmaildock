@@ -40,23 +40,6 @@
     if (window !== window.top) return;
     if (location.hostname !== 'mail.google.com') return;
 
-    let unreadCount;
-    function syncUnreadCount() {
-      const inbox = document.querySelector('a[href$="#inbox"]');
-      const inboxLabel = inbox && `${inbox.getAttribute('aria-label') || ''} ${inbox.textContent || ''}`;
-      const inboxMatch = inboxLabel && /(?:^|\D)(\d[\d,]*)/.exec(inboxLabel);
-      const titleMatch = /^.{0,24}?\(([\d,]+)\)(?:\s|$)/.exec(document.title);
-      const count = Number((inboxMatch?.[1] || titleMatch?.[1] || '0').replaceAll(',', ''));
-      if (!Number.isSafeInteger(count) || count === unreadCount) return;
-      unreadCount = count;
-      window.__TAURI__.core.invoke('set_unread_count', { count }).catch((error) => {
-        console.warn('Could not set GmailDock unread badge:', error);
-      });
-    }
-    new MutationObserver(syncUnreadCount).observe(document.head, { childList: true, characterData: true, subtree: true });
-    syncUnreadCount();
-    setInterval(syncUnreadCount, 15000);
-
     const make = (tag, text) => {
       const element = document.createElement(tag);
       if (text) element.textContent = text;
@@ -105,6 +88,7 @@
 
     const autoUpdates = addOption('Check for updates automatically');
     const closeToTray = addOption('Keep running in tray when closing');
+    const startAtLogin = addOption('Start automatically at login');
     const checkNow = make('button', 'Check for updates now');
     checkNow.type = 'button';
     Object.assign(checkNow.style, { width: '100%', marginTop: '13px', padding: '10px', border: '1px solid #d5e4e1', borderRadius: '10px', background: '#f1f8f6', color: '#086f69', font: '600 13px system-ui, sans-serif', cursor: 'pointer' });
@@ -113,10 +97,55 @@
     status.setAttribute('aria-live', 'polite');
     Object.assign(status.style, { minHeight: '18px', margin: '9px 0 0', color: '#64737a', font: '12px system-ui, sans-serif' });
     panel.append(checkNow, status);
-    ui.append(panel, bar);
+
+    const aboutHeading = make('h3', 'About');
+    Object.assign(aboutHeading.style, { margin: '18px 0 8px', paddingTop: '16px', borderTop: '1px solid #eef1f1', font: '600 15px system-ui, sans-serif' });
+    const appVersion = make('p', 'GmailDock');
+    Object.assign(appVersion.style, { margin: '0 0 8px', color: '#64737a' });
+    const developer = make('p', 'Developer: Lahiru S Liyanage');
+    Object.assign(developer.style, { margin: '0 0 8px' });
+    const aboutLinks = make('div');
+    Object.assign(aboutLinks.style, { display: 'flex', gap: '14px' });
+    const developerLink = make('button', 'GitHub profile ↗');
+    const repositoryLink = make('button', 'Source repository ↗');
+    for (const link of [developerLink, repositoryLink]) {
+      link.type = 'button';
+      Object.assign(link.style, { padding: '0', border: '0', background: 'transparent', color: '#087e78', font: '600 12px system-ui, sans-serif', cursor: 'pointer', textDecoration: 'underline' });
+    }
+    aboutLinks.append(developerLink, repositoryLink);
+    panel.append(aboutHeading, appVersion, developer, aboutLinks);
+
+    const overlay = make('div');
+    Object.assign(overlay.style, { display: 'none', position: 'fixed', inset: '0', alignItems: 'center', justifyContent: 'center', padding: '24px', background: '#172b3699', zIndex: '1' });
+    const dialog = make('section');
+    dialog.setAttribute('role', 'dialog');
+    dialog.setAttribute('aria-modal', 'true');
+    dialog.setAttribute('aria-label', 'GmailDock update available');
+    Object.assign(dialog.style, { width: 'min(440px, 100%)', maxHeight: 'min(80vh, 620px)', overflow: 'auto', padding: '26px', borderRadius: '20px', background: '#fff', boxShadow: '0 24px 70px #0005' });
+    const updateHeading = make('h2');
+    Object.assign(updateHeading.style, { margin: '0 0 8px', font: '700 22px system-ui, sans-serif' });
+    const updateIntro = make('p', 'What’s new');
+    Object.assign(updateIntro.style, { margin: '0 0 12px', color: '#5b6b72', font: '13px system-ui, sans-serif' });
+    const releaseNotes = make('div');
+    Object.assign(releaseNotes.style, { maxHeight: '240px', overflow: 'auto', padding: '14px', borderRadius: '12px', background: '#f4f7f6', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere', lineHeight: '1.5', font: '13px system-ui, sans-serif' });
+    const updateStatus = make('p');
+    updateStatus.setAttribute('role', 'status');
+    Object.assign(updateStatus.style, { minHeight: '18px', margin: '12px 0 0', color: '#8b3333', font: '12px system-ui, sans-serif' });
+    const updateActions = make('div');
+    Object.assign(updateActions.style, { display: 'flex', justifyContent: 'flex-end', gap: '10px', marginTop: '18px' });
+    const laterButton = make('button', 'Later');
+    stylePill(laterButton);
+    const installButton = make('button', 'Update now');
+    stylePill(installButton);
+    Object.assign(installButton.style, { background: '#087e78', borderColor: '#087e78', color: '#fff' });
+    updateActions.append(laterButton, installButton);
+    dialog.append(updateHeading, updateIntro, releaseNotes, updateStatus, updateActions);
+    overlay.append(dialog);
+    ui.append(panel, bar, overlay);
     document.body.append(host);
-    let settings = { autoCheckUpdates: true, closeToTray: true };
-    let availableVersion;
+    let settings = { autoCheckUpdates: true, closeToTray: true, startAtLogin: true };
+    let availableUpdate;
+    let announcedVersion;
     let checking = false;
     let startupCheck;
     let periodicCheck;
@@ -129,19 +158,41 @@
       periodicCheck = setInterval(() => checkUpdates(false), 30 * 60 * 1000);
     }
 
+    function showUpdateDialog() {
+      if (!availableUpdate) return;
+      setPanelOpen(false);
+      updateHeading.textContent = `GmailDock v${availableUpdate.version} is available`;
+      releaseNotes.textContent = availableUpdate.notes?.trim() || 'Release notes are unavailable.';
+      updateStatus.textContent = '';
+      overlay.style.display = 'flex';
+      installButton.focus();
+    }
+
+    function hideUpdateDialog() {
+      if (installButton.disabled) return;
+      overlay.style.display = 'none';
+      updateButton.focus();
+    }
+
     async function checkUpdates(manual) {
       if (checking || updateButton.disabled) return;
       checking = true;
       if (manual) status.textContent = 'Checking for updates…';
       try {
-        const version = await window.__TAURI__.core.invoke('check_for_updates');
-        availableVersion = version;
-        updateButton.style.display = version ? 'inline-flex' : 'none';
-        if (version) {
-          updateButton.textContent = `Update to v${version}`;
-          updateButton.title = `Install GmailDock v${version}`;
+        const update = await window.__TAURI__.core.invoke('check_for_updates');
+        availableUpdate = update;
+        updateButton.style.display = update ? 'inline-flex' : 'none';
+        if (update) {
+          updateButton.textContent = `Update to v${update.version}`;
+          updateButton.title = `See what’s new in GmailDock v${update.version}`;
+          if (manual || announcedVersion !== update.version) {
+            announcedVersion = update.version;
+            showUpdateDialog();
+          }
+        } else {
+          overlay.style.display = 'none';
         }
-        if (manual) status.textContent = version ? `Version ${version} is available.` : 'You are up to date.';
+        if (manual) status.textContent = update ? `Version ${update.version} is available.` : 'You are up to date.';
       } catch (error) {
         if (manual) status.textContent = `Update check failed: ${error}`;
       } finally {
@@ -155,6 +206,7 @@
       if (key === 'autoCheckUpdates') scheduleChecks();
       autoUpdates.disabled = true;
       closeToTray.disabled = true;
+      startAtLogin.disabled = true;
       try {
         await window.__TAURI__.core.invoke('save_settings', { settings });
         status.textContent = 'Settings saved.';
@@ -162,11 +214,13 @@
         settings = previous;
         autoUpdates.checked = settings.autoCheckUpdates;
         closeToTray.checked = settings.closeToTray;
+        startAtLogin.checked = settings.startAtLogin;
         scheduleChecks();
         status.textContent = `Could not save settings: ${error}`;
       } finally {
         autoUpdates.disabled = false;
         closeToTray.disabled = false;
+        startAtLogin.disabled = false;
       }
     }
 
@@ -179,6 +233,10 @@
       if (!host.contains(event.target)) setPanelOpen(false);
     });
     document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape' && overlay.style.display !== 'none') {
+        hideUpdateDialog();
+        return;
+      }
       if (event.key === 'Escape' && panel.style.display !== 'none') {
         setPanelOpen(false);
         settingsButton.focus();
@@ -186,18 +244,29 @@
     });
     autoUpdates.addEventListener('change', () => changeSetting('autoCheckUpdates', autoUpdates.checked));
     closeToTray.addEventListener('change', () => changeSetting('closeToTray', closeToTray.checked));
+    startAtLogin.addEventListener('change', () => changeSetting('startAtLogin', startAtLogin.checked));
     checkNow.addEventListener('click', () => checkUpdates(true));
-    updateButton.addEventListener('click', async () => {
-      if (!availableVersion) return;
+    developerLink.addEventListener('click', () => window.__TAURI__.core.invoke('open_about_link', { link: 'developer' }).catch((error) => { status.textContent = `Could not open link: ${error}`; }));
+    repositoryLink.addEventListener('click', () => window.__TAURI__.core.invoke('open_about_link', { link: 'repository' }).catch((error) => { status.textContent = `Could not open link: ${error}`; }));
+    updateButton.addEventListener('click', showUpdateDialog);
+    laterButton.addEventListener('click', hideUpdateDialog);
+    installButton.addEventListener('click', async () => {
+      if (!availableUpdate) return;
       updateButton.disabled = true;
+      installButton.disabled = true;
+      laterButton.disabled = true;
       updateButton.textContent = 'Installing update…';
+      installButton.textContent = 'Installing…';
+      updateStatus.textContent = 'Downloading and installing the update…';
       try {
         await window.__TAURI__.core.invoke('install_update');
       } catch (error) {
         updateButton.disabled = false;
-        updateButton.textContent = 'Update failed — retry';
-        status.textContent = `Could not install update: ${error}`;
-        setPanelOpen(true);
+        installButton.disabled = false;
+        laterButton.disabled = false;
+        updateButton.textContent = `Update to v${availableUpdate.version}`;
+        installButton.textContent = 'Retry update';
+        updateStatus.textContent = `Could not install update: ${error}`;
       }
     });
 
@@ -205,9 +274,13 @@
       settings = saved;
       autoUpdates.checked = settings.autoCheckUpdates;
       closeToTray.checked = settings.closeToTray;
+      startAtLogin.checked = settings.startAtLogin;
       scheduleChecks();
     }).catch((error) => {
       status.textContent = `Could not load settings: ${error}`;
+    });
+    window.__TAURI__.core.invoke('get_app_version').then((version) => {
+      appVersion.textContent = `GmailDock v${version}`;
     });
   }
 

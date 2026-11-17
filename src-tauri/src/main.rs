@@ -3,17 +3,30 @@
 use std::{fs, io::ErrorKind, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, Manager};
+use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, webview::NewWindowResponse, Manager};
+use tauri_plugin_autostart::MacosLauncher;
+#[cfg(not(debug_assertions))]
+use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_updater::UpdaterExt;
 
 const GMAIL_URL: &str = "https://mail.google.com/";
 const SETTINGS_FILE: &str = "settings.json";
+const DEVELOPER_URL: &str = "https://github.com/nooblk-98";
+const REPOSITORY_URL: &str = "https://github.com/nooblk-98/gmaildock";
+
+fn is_google_popup(url: &tauri::Url) -> bool {
+    matches!(
+        url.host_str(),
+        Some("accounts.google.com" | "mail.google.com")
+    ) || (url.scheme() == "about" && url.path() == "blank")
+}
 
 #[derive(Clone, Copy, Deserialize, Serialize)]
 #[serde(default, rename_all = "camelCase")]
 struct AppSettings {
     auto_check_updates: bool,
     close_to_tray: bool,
+    start_at_login: bool,
 }
 
 impl Default for AppSettings {
@@ -21,6 +34,7 @@ impl Default for AppSettings {
         Self {
             auto_check_updates: true,
             close_to_tray: true,
+            start_at_login: true,
         }
     }
 }
@@ -44,6 +58,15 @@ fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
 
 #[tauri::command]
 fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+    #[cfg(not(debug_assertions))]
+    {
+        let autolaunch = app.autolaunch();
+        if settings.start_at_login {
+            autolaunch.enable().map_err(|error| error.to_string())?;
+        } else {
+            autolaunch.disable().map_err(|error| error.to_string())?;
+        }
+    }
     let path = settings_path(&app)?;
     let parent = path.parent().ok_or("invalid settings path")?;
     fs::create_dir_all(parent).map_err(|error| error.to_string())?;
@@ -52,14 +75,44 @@ fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), Str
 }
 
 #[tauri::command]
-async fn check_for_updates(app: tauri::AppHandle) -> Result<Option<String>, String> {
+async fn check_for_updates(app: tauri::AppHandle) -> Result<Option<AvailableUpdate>, String> {
     let update = app
         .updater()
         .map_err(|error| error.to_string())?
         .check()
         .await
         .map_err(|error| error.to_string())?;
-    Ok(update.map(|available| available.version))
+    Ok(update.map(|available| AvailableUpdate {
+        version: available.version,
+        notes: available.body,
+    }))
+}
+
+#[derive(Serialize)]
+struct AvailableUpdate {
+    version: String,
+    notes: Option<String>,
+}
+
+#[tauri::command]
+fn get_app_version(app: tauri::AppHandle) -> String {
+    app.package_info().version.to_string()
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum AboutLink {
+    Developer,
+    Repository,
+}
+
+#[tauri::command]
+fn open_about_link(link: AboutLink) -> Result<(), String> {
+    let url = match link {
+        AboutLink::Developer => DEVELOPER_URL,
+        AboutLink::Repository => REPOSITORY_URL,
+    };
+    tauri_plugin_opener::open_url(url, None::<&str>).map_err(|error| error.to_string())
 }
 
 #[tauri::command]
@@ -78,82 +131,18 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     app.restart();
 }
 
-#[cfg(target_os = "windows")]
-fn badge_image(count: u32) -> tauri::image::Image<'static> {
-    const SIZE: usize = 32;
-    const GLYPHS: [[u8; 5]; 11] = [
-        [0b111, 0b101, 0b101, 0b101, 0b111],
-        [0b010, 0b110, 0b010, 0b010, 0b111],
-        [0b111, 0b001, 0b111, 0b100, 0b111],
-        [0b111, 0b001, 0b111, 0b001, 0b111],
-        [0b101, 0b101, 0b111, 0b001, 0b001],
-        [0b111, 0b100, 0b111, 0b001, 0b111],
-        [0b111, 0b100, 0b111, 0b101, 0b111],
-        [0b111, 0b001, 0b010, 0b010, 0b010],
-        [0b111, 0b101, 0b111, 0b101, 0b111],
-        [0b111, 0b101, 0b111, 0b001, 0b111],
-        [0b000, 0b010, 0b111, 0b010, 0b000],
-    ];
-    let label = if count > 99 {
-        "99+".to_owned()
-    } else {
-        count.to_string()
-    };
-    let scale = match label.len() {
-        1 => 4,
-        2 => 3,
-        _ => 2,
-    };
-    let width = (label.len() * 3 + label.len() - 1) * scale;
-    let left = (SIZE - width) / 2;
-    let top = (SIZE - 5 * scale) / 2;
-    let mut rgba = vec![0; SIZE * SIZE * 4];
-    for y in 0..SIZE {
-        for x in 0..SIZE {
-            let dx = x as i32 - 16;
-            let dy = y as i32 - 16;
-            if dx * dx + dy * dy <= 15 * 15 {
-                rgba[(y * SIZE + x) * 4..(y * SIZE + x) * 4 + 4]
-                    .copy_from_slice(&[220, 38, 38, 255]);
-            }
-        }
-    }
-    for (index, digit) in label.bytes().enumerate() {
-        let glyph = if digit == b'+' {
-            10
-        } else {
-            (digit - b'0') as usize
-        };
-        for (row, bits) in GLYPHS[glyph].iter().enumerate() {
-            for column in 0..3 {
-                if bits & (0b100 >> column) == 0 {
-                    continue;
-                }
-                for sy in 0..scale {
-                    for sx in 0..scale {
-                        let x = left + (index * 4 + column) * scale + sx;
-                        let y = top + row * scale + sy;
-                        rgba[(y * SIZE + x) * 4..(y * SIZE + x) * 4 + 4]
-                            .copy_from_slice(&[255, 255, 255, 255]);
-                    }
-                }
-            }
-        }
-    }
-    tauri::image::Image::new_owned(rgba, SIZE as u32, SIZE as u32)
-}
-
-#[tauri::command]
-fn set_unread_count(window: tauri::WebviewWindow, count: u32) -> Result<(), String> {
-    #[cfg(target_os = "windows")]
-    let result = window.set_overlay_icon((count > 0).then(|| badge_image(count)));
-    #[cfg(not(target_os = "windows"))]
-    let result = window.set_badge_count((count > 0).then_some(i64::from(count)));
-    result.map_err(|error| error.to_string())
-}
-
 fn main() -> tauri::Result<()> {
     tauri::Builder::default()
+        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.show();
+                let _ = window.set_focus();
+            }
+        }))
+        .plugin(tauri_plugin_autostart::init(
+            MacosLauncher::LaunchAgent,
+            None,
+        ))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -173,11 +162,21 @@ fn main() -> tauri::Result<()> {
         .invoke_handler(tauri::generate_handler![
             check_for_updates,
             install_update,
-            set_unread_count,
+            get_app_version,
+            open_about_link,
             get_settings,
             save_settings
         ])
         .setup(|app| {
+            #[cfg(not(debug_assertions))]
+            {
+                let settings = get_settings(app.handle().clone()).unwrap_or_default();
+                if settings.start_at_login {
+                    if let Err(error) = app.autolaunch().enable() {
+                        eprintln!("failed to enable GmailDock autostart: {error}");
+                    }
+                }
+            }
             let menu = MenuBuilder::new(app)
                 .text("show", "Show GmailDock")
                 .separator()
@@ -208,6 +207,16 @@ fn main() -> tauri::Result<()> {
                 .inner_size(1200.0, 780.0)
                 .min_inner_size(780.0, 540.0)
                 .initialization_script_for_all_frames(include_str!("injected.js"))
+                .on_new_window(|url, _| {
+                    if is_google_popup(&url) {
+                        NewWindowResponse::Allow
+                    } else {
+                        if matches!(url.scheme(), "http" | "https") {
+                            let _ = tauri_plugin_opener::open_url(url.as_str(), None::<&str>);
+                        }
+                        NewWindowResponse::Deny
+                    }
+                })
                 .build()?;
             Ok(())
         })
@@ -216,12 +225,23 @@ fn main() -> tauri::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::AppSettings;
+    use super::{is_google_popup, AppSettings};
 
     #[test]
     fn existing_settings_default_to_closing_to_tray() {
         let saved = r#"{"autoCheckUpdates":false,"hideAccountLink":false}"#;
         let settings: AppSettings = serde_json::from_str(saved).expect("valid settings JSON");
         assert!(settings.close_to_tray);
+        assert!(settings.start_at_login);
+    }
+
+    #[test]
+    fn google_account_popups_stay_in_app() {
+        let account = tauri::Url::parse("https://accounts.google.com/AddSession").unwrap();
+        let blank = tauri::Url::parse("about:blank#login").unwrap();
+        let external = tauri::Url::parse("https://example.com/").unwrap();
+        assert!(is_google_popup(&account));
+        assert!(is_google_popup(&blank));
+        assert!(!is_google_popup(&external));
     }
 }

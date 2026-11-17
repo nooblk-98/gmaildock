@@ -19,8 +19,12 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 - Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
 - Has an in-app Settings button for automatic update checks and close behavior. It always hides the Google Account shortcut and Google apps launcher.
 - Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; use the tray menu to show or quit the app.
+- Opening GmailDock again focuses the running window instead of creating another tray icon.
 - Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
-- Shows Gmail's unread Inbox count on the app icon using the Inbox navigation label or page title. Windows uses a taskbar badge; macOS and supported Linux desktops use their native badge count.
+- Shows release notes and an Update now button in a dialog when an update is available.
+- Can start automatically when you sign in; this is on by default and can be changed in Settings.
+- Settings includes an About section with the developer profile and source repository.
+- Supports Google account popups used by Gmail's Add another account action.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
@@ -42,11 +46,17 @@ npm run dev
 
 To build a local installer, run `npm run build`. The bundles are written under `src-tauri/target/release/bundle/`.
 
+## Testing and contributing
+
+GmailDock is currently tested hands-on on Windows. The release workflow builds macOS and Linux packages, but those platforms need more real-world testing. If you use macOS or Linux, please try a release and [open an issue](https://github.com/nooblk-98/gmaildock/issues) with your OS version, package type, steps to reproduce, and any error you see.
+
+Contributions are welcome, especially for macOS and Linux compatibility, account sign-in behavior, accessibility, and the update experience. Please open an issue or pull request in the [repository](https://github.com/nooblk-98/gmaildock).
+
 ## Releases and updates
 
 The [release workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux packages. A version tag creates a signed release and `latest.json` for the in-app updater. The updater checks this repository's [latest release](https://github.com/nooblk-98/gmaildock/releases/latest).
 
-Maintainers: update the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, then push a matching tag such as `v0.2.0`. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
+Maintainers: update the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, add `.github/release-notes/vX.Y.Z.md`, then push a matching tag. The notes are included in the release and in-app update dialog. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
 
 ## About this project
 
