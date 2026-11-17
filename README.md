@@ -17,9 +17,12 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 - Gmail in a dedicated desktop window on Windows, macOS, and Linux.
 - Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
-- Has a Settings panel (tray menu, Settings) for automatic update checks and close behavior. It always hides the Google Account shortcut and Google apps launcher.
-- Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; left-click the tray icon to open Gmail, or right-click for Accounts, Settings, Reload, and Quit.
+- Has a Settings panel (tray menu, Settings) for automatic update checks, close behavior, notifications, and whether non-Google links open in your browser. It always hides the Google Account shortcut and Google apps launcher.
+- Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; left-click the tray icon to open Gmail, or right-click for Accounts, Settings, Open in browser, Reload, Troubleshooting, and Quit.
 - Opening GmailDock again focuses the running window instead of creating another tray icon.
+- Keeps non-Google links out of the app window: they open in your default browser. Turn this off in Settings if a sign-in flow needs to stay inside GmailDock.
+- Shows a notification when a download finishes.
+- Writes a log file; open it from the tray (Troubleshooting, Open logs folder) when reporting a problem.
 - Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
 - Shows release notes and an Update now button in a dialog when an update is available.
 - Can start automatically when you sign in; this is on by default and can be changed in Settings.
@@ -65,7 +68,7 @@ Maintainers: run `npm run release -- X.Y.Z` to bump every version file and draft
 
 ## Privacy
 
-GmailDock only wraps the Gmail website. It does not read, upload, or store your mail, and it has no servers of its own. The only data it saves locally is a small settings file (update, tray, notification, zoom, and startup preferences). Your Google session lives in the system webview, as in a browser. The updater contacts GitHub to look for new releases.
+GmailDock only wraps the Gmail website. It does not read, upload, or store your mail, and it has no servers of its own. The only data it saves locally is a small settings file (update, tray, notification, link, zoom, and startup preferences) and a log file used for troubleshooting. Your Google session lives in the system webview, as in a browser. The updater contacts GitHub to look for new releases.
 
 ## About this project
 
