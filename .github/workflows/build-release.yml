@@ -82,6 +82,8 @@ jobs:
         working-directory: src-tauri
 
   build:
+    # Branch pushes only run the quick checks; full builds run for tags, pull requests and manual runs.
+    if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/v')
     needs: [validate, check]
     strategy:
       fail-fast: false

@@ -17,8 +17,8 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 - Gmail in a dedicated desktop window on Windows, macOS, and Linux.
 - Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
-- Has an in-app Settings button for automatic update checks and close behavior. It always hides the Google Account shortcut and Google apps launcher.
-- Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; use the tray menu to show or quit the app.
+- Has a Settings panel (tray menu, Settings) for automatic update checks and close behavior. It always hides the Google Account shortcut and Google apps launcher.
+- Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; left-click the tray icon to open Gmail, or right-click for Accounts, Settings, Reload, and Quit.
 - Opening GmailDock again focuses the running window instead of creating another tray icon.
 - Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
 - Shows release notes and an Update now button in a dialog when an update is available.

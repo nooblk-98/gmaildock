@@ -104,18 +104,18 @@
     const updateButton = make('button');
     stylePill(updateButton);
     updateButton.style.display = 'none';
-    const settingsButton = make('button', '⚙ Settings');
-    stylePill(settingsButton);
-    settingsButton.setAttribute('aria-label', 'GmailDock settings');
-    settingsButton.setAttribute('aria-expanded', 'false');
-    bar.append(updateButton, settingsButton);
+    bar.append(updateButton);
 
     const panel = make('section');
     panel.setAttribute('aria-label', 'GmailDock settings');
     Object.assign(panel.style, { display: 'none', position: 'absolute', right: '0', bottom: '50px', width: 'min(304px, calc(100vw - 36px))', padding: '18px', border: '1px solid #e4e9e8', borderRadius: '18px', background: '#fff', boxShadow: '0 12px 38px #182a3440' });
     const heading = make('h2', 'GmailDock settings');
     Object.assign(heading.style, { margin: '0 0 15px', font: '600 17px system-ui, sans-serif' });
-    panel.append(heading);
+    const closePanel = make('button', 'Close');
+    closePanel.type = 'button';
+    Object.assign(closePanel.style, { float: 'right', padding: '2px 8px', border: '0', background: 'transparent', color: '#086f69', font: '600 12px system-ui, sans-serif', cursor: 'pointer' });
+    closePanel.addEventListener('click', () => setPanelOpen(false));
+    panel.append(closePanel, heading);
 
     function addOption(labelText) {
       const label = make('label');
@@ -305,9 +305,9 @@
 
     function setPanelOpen(open) {
       panel.style.display = open ? 'block' : 'none';
-      settingsButton.setAttribute('aria-expanded', String(open));
     }
-    settingsButton.addEventListener('click', () => setPanelOpen(panel.style.display === 'none'));
+    // Opened from the tray menu (Settings).
+    window.__gmaildockOpenSettings = () => setPanelOpen(true);
     document.addEventListener('pointerdown', (event) => {
       if (!host.contains(event.target)) setPanelOpen(false);
     });
@@ -318,7 +318,6 @@
       }
       if (event.key === 'Escape' && panel.style.display !== 'none') {
         setPanelOpen(false);
-        settingsButton.focus();
       }
     });
     autoUpdates.addEventListener('change', () => changeSetting('autoCheckUpdates', autoUpdates.checked));

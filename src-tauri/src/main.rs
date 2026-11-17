@@ -8,7 +8,12 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, webview::NewWindowResponse, Manager};
+use tauri::{
+    menu::MenuBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    webview::NewWindowResponse,
+    Manager,
+};
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
@@ -18,6 +23,8 @@ use tauri_plugin_updater::UpdaterExt;
 
 const GMAIL_URL: &str = "https://mail.google.com/";
 const TOGGLE_SHORTCUT: &str = "CommandOrControl+Shift+G";
+const ACCOUNTS_URL: &str =
+    "https://accounts.google.com/AccountChooser?service=mail&continue=https://mail.google.com/mail/";
 const MINIMIZED_ARG: &str = "--minimized";
 const SETTINGS_FILE: &str = "settings.json";
 const DEVELOPER_URL: &str = "https://github.com/nooblk-98";
@@ -67,6 +74,14 @@ fn clamp_zoom(zoom: f64) -> f64 {
     } else {
         1.0
     }
+}
+
+fn show_main_window(app: &tauri::AppHandle) -> Option<tauri::WebviewWindow> {
+    let window = app.get_webview_window("main")?;
+    let _ = window.show();
+    let _ = window.unminimize();
+    let _ = window.set_focus();
+    Some(window)
 }
 
 fn toggle_window(app: &tauri::AppHandle) {
@@ -329,9 +344,10 @@ fn main() -> tauri::Result<()> {
             let start_hidden =
                 settings.start_minimized && std::env::args().any(|arg| arg == MINIMIZED_ARG);
             let menu = MenuBuilder::new(app)
-                .text("show", "Show GmailDock")
-                .separator()
-                .text("quit", "Quit GmailDock")
+                .text("accounts", "Accounts...")
+                .text("settings", "Settings")
+                .text("reload", "Reload")
+                .text("quit", "Quit")
                 .build()?;
             let icon = app
                 .default_window_icon()
@@ -341,11 +357,33 @@ fn main() -> tauri::Result<()> {
                 .icon(icon)
                 .menu(&menu)
                 .tooltip("GmailDock")
+                .show_menu_on_left_click(false)
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main_window(tray.app_handle());
+                    }
+                })
                 .on_menu_event(|app, event| match event.id().as_ref() {
-                    "show" => {
-                        if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                    "accounts" => {
+                        if let Some(window) = show_main_window(app) {
+                            if let Ok(url) = tauri::Url::parse(ACCOUNTS_URL) {
+                                let _ = window.navigate(url);
+                            }
+                        }
+                    }
+                    "settings" => {
+                        if let Some(window) = show_main_window(app) {
+                            let _ = window.eval("window.__gmaildockOpenSettings?.()");
+                        }
+                    }
+                    "reload" => {
+                        if let Some(window) = show_main_window(app) {
+                            let _ = window.eval("location.reload()");
                         }
                     }
                     "quit" => app.exit(0),
