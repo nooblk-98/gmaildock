@@ -3,7 +3,7 @@
 use std::{fs, io::ErrorKind, path::PathBuf};
 
 use serde::{Deserialize, Serialize};
-use tauri::Manager;
+use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, Manager};
 use tauri_plugin_updater::UpdaterExt;
 
 const GMAIL_URL: &str = "https://mail.google.com/";
@@ -13,14 +13,14 @@ const SETTINGS_FILE: &str = "settings.json";
 #[serde(default, rename_all = "camelCase")]
 struct AppSettings {
     auto_check_updates: bool,
-    hide_account_link: bool,
+    close_to_tray: bool,
 }
 
 impl Default for AppSettings {
     fn default() -> Self {
         Self {
             auto_check_updates: true,
-            hide_account_link: true,
+            close_to_tray: true,
         }
     }
 }
@@ -81,6 +81,21 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
 fn main() -> tauri::Result<()> {
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let close_to_tray = get_settings(window.app_handle().clone())
+                    .unwrap_or_default()
+                    .close_to_tray;
+                api.prevent_close();
+                if close_to_tray {
+                    if let Err(error) = window.hide() {
+                        eprintln!("failed to hide GmailDock window: {error}");
+                    }
+                } else {
+                    window.app_handle().exit(0);
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             check_for_updates,
             install_update,
@@ -88,6 +103,30 @@ fn main() -> tauri::Result<()> {
             save_settings
         ])
         .setup(|app| {
+            let menu = MenuBuilder::new(app)
+                .text("show", "Show GmailDock")
+                .separator()
+                .text("quit", "Quit GmailDock")
+                .build()?;
+            let icon = app
+                .default_window_icon()
+                .cloned()
+                .ok_or_else(|| std::io::Error::other("GmailDock icon is missing"))?;
+            TrayIconBuilder::new()
+                .icon(icon)
+                .menu(&menu)
+                .tooltip("GmailDock")
+                .on_menu_event(|app, event| match event.id().as_ref() {
+                    "show" => {
+                        if let Some(window) = app.get_webview_window("main") {
+                            let _ = window.show();
+                            let _ = window.set_focus();
+                        }
+                    }
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .build(app)?;
             let url = tauri::Url::parse(GMAIL_URL)?;
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                 .title("GmailDock")
@@ -98,4 +137,16 @@ fn main() -> tauri::Result<()> {
             Ok(())
         })
         .run(tauri::generate_context!())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::AppSettings;
+
+    #[test]
+    fn existing_settings_default_to_closing_to_tray() {
+        let saved = r#"{"autoCheckUpdates":false,"hideAccountLink":false}"#;
+        let settings: AppSettings = serde_json::from_str(saved).expect("valid settings JSON");
+        assert!(settings.close_to_tray);
+    }
 }

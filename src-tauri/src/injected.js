@@ -1,16 +1,11 @@
 (() => {
   const accountLink = 'Manage your Google Account';
   const interactive = 'a, button, [role="button"]';
-  const hiddenMarker = 'data-gmaildock-hidden';
-  let hideAccountLinkEnabled = true;
 
   function hideAccountLink(element) {
-    if (!hideAccountLinkEnabled || element.hasAttribute(hiddenMarker)) return;
-    if (element.textContent?.trim() !== accountLink) return;
-    element.setAttribute(hiddenMarker, '');
-    element.setAttribute('data-gmaildock-display', element.style.getPropertyValue('display'));
-    element.setAttribute('data-gmaildock-priority', element.style.getPropertyPriority('display'));
-    element.style.setProperty('display', 'none', 'important');
+    if (element.textContent?.trim() === accountLink) {
+      element.style.setProperty('display', 'none', 'important');
+    }
   }
 
   function hideGoogleApps(element) {
@@ -22,7 +17,7 @@
   function scan(root) {
     if (root.nodeType === Node.TEXT_NODE) {
       const parent = root.parentElement?.closest(interactive);
-      if (parent && hideAccountLinkEnabled) hideAccountLink(parent);
+      if (parent) hideAccountLink(parent);
       return;
     }
     if (root.nodeType !== Node.ELEMENT_NODE) return;
@@ -34,37 +29,6 @@
     }
   }
 
-  function notifyChildren() {
-    for (const frame of document.querySelectorAll('iframe')) {
-      frame.contentWindow?.postMessage({ type: 'gmaildock:hide-link', value: hideAccountLinkEnabled }, '*');
-    }
-  }
-
-  function setHideAccountLink(value) {
-    hideAccountLinkEnabled = value;
-    if (value) scan(document.documentElement);
-    else {
-      for (const element of document.querySelectorAll(`[${hiddenMarker}]`)) {
-        const display = element.getAttribute('data-gmaildock-display');
-        const priority = element.getAttribute('data-gmaildock-priority');
-        if (display) element.style.setProperty('display', display, priority || '');
-        else element.style.removeProperty('display');
-        element.removeAttribute(hiddenMarker);
-        element.removeAttribute('data-gmaildock-display');
-        element.removeAttribute('data-gmaildock-priority');
-      }
-    }
-    notifyChildren();
-  }
-
-  window.addEventListener('message', (event) => {
-    if (event.data?.type === 'gmaildock:request-hide-link' && event.source) {
-      event.source.postMessage({ type: 'gmaildock:hide-link', value: hideAccountLinkEnabled }, event.origin || '*');
-    } else if (event.data?.type === 'gmaildock:hide-link' && event.source === window.parent) {
-      setHideAccountLink(Boolean(event.data.value));
-    }
-  });
-
   function mount() {
     scan(document.documentElement);
     new MutationObserver((records) => {
@@ -73,10 +37,7 @@
       }
     }).observe(document.documentElement, { childList: true, subtree: true });
 
-    if (window !== window.top) {
-      window.parent.postMessage({ type: 'gmaildock:request-hide-link' }, '*');
-      return;
-    }
+    if (window !== window.top) return;
     if (location.hostname !== 'mail.google.com') return;
 
     const make = (tag, text) => {
@@ -126,7 +87,7 @@
     }
 
     const autoUpdates = addOption('Check for updates automatically');
-    const hideLink = addOption('Hide Google Account link');
+    const closeToTray = addOption('Keep running in tray when closing');
     const checkNow = make('button', 'Check for updates now');
     checkNow.type = 'button';
     Object.assign(checkNow.style, { width: '100%', marginTop: '13px', padding: '10px', border: '1px solid #d5e4e1', borderRadius: '10px', background: '#f1f8f6', color: '#086f69', font: '600 13px system-ui, sans-serif', cursor: 'pointer' });
@@ -137,7 +98,7 @@
     panel.append(checkNow, status);
     ui.append(panel, bar);
     document.body.append(host);
-    let settings = { autoCheckUpdates: true, hideAccountLink: true };
+    let settings = { autoCheckUpdates: true, closeToTray: true };
     let availableVersion;
     let checking = false;
     let startupCheck;
@@ -174,23 +135,21 @@
     async function changeSetting(key, value) {
       const previous = settings;
       settings = { ...settings, [key]: value };
-      if (key === 'hideAccountLink') setHideAccountLink(value);
-      else scheduleChecks();
+      if (key === 'autoCheckUpdates') scheduleChecks();
       autoUpdates.disabled = true;
-      hideLink.disabled = true;
+      closeToTray.disabled = true;
       try {
         await window.__TAURI__.core.invoke('save_settings', { settings });
         status.textContent = 'Settings saved.';
       } catch (error) {
         settings = previous;
         autoUpdates.checked = settings.autoCheckUpdates;
-        hideLink.checked = settings.hideAccountLink;
-        setHideAccountLink(settings.hideAccountLink);
+        closeToTray.checked = settings.closeToTray;
         scheduleChecks();
         status.textContent = `Could not save settings: ${error}`;
       } finally {
         autoUpdates.disabled = false;
-        hideLink.disabled = false;
+        closeToTray.disabled = false;
       }
     }
 
@@ -209,7 +168,7 @@
       }
     });
     autoUpdates.addEventListener('change', () => changeSetting('autoCheckUpdates', autoUpdates.checked));
-    hideLink.addEventListener('change', () => changeSetting('hideAccountLink', hideLink.checked));
+    closeToTray.addEventListener('change', () => changeSetting('closeToTray', closeToTray.checked));
     checkNow.addEventListener('click', () => checkUpdates(true));
     updateButton.addEventListener('click', async () => {
       if (!availableVersion || !confirm(`Install GmailDock v${availableVersion} now?`)) return;
@@ -227,8 +186,7 @@
     window.__TAURI__.core.invoke('get_settings').then((saved) => {
       settings = saved;
       autoUpdates.checked = settings.autoCheckUpdates;
-      hideLink.checked = settings.hideAccountLink;
-      setHideAccountLink(settings.hideAccountLink);
+      closeToTray.checked = settings.closeToTray;
       scheduleChecks();
     }).catch((error) => {
       status.textContent = `Could not load settings: ${error}`;
