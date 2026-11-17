@@ -13,6 +13,8 @@ permissions:
 jobs:
   validate:
     runs-on: ubuntu-22.04
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - name: Check release version
@@ -37,6 +39,16 @@ jobs:
             echo "::error::Set the TAURI_SIGNING_PRIVATE_KEY repository secret before releasing"
             exit 1
           }
+      - name: Create one draft release before parallel builds
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" \
+              --draft --title "GmailDock $GITHUB_REF_NAME" \
+              --notes-file ".github/release-notes/$GITHUB_REF_NAME.md"
+          fi
 
   build:
     needs: validate
