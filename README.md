@@ -17,21 +17,22 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 - Gmail in a dedicated desktop window on Windows, macOS, and Linux.
 - Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
-- Has a Settings panel (tray menu, Settings) for automatic update checks, close behavior, notifications, and whether non-Google links open in your browser. It always hides the Google Account shortcut and Google apps launcher.
+- Has a native Settings window (tray menu, Settings, or `gmaildock --settings`) for updates, startup, notifications, link handling, zoom, and the global shortcut. It always hides the Google Account shortcut and Google apps launcher.
 - Closing the window keeps GmailDock running in the system tray by default. Change this in Settings; left-click the tray icon to open Gmail, or right-click for Accounts, Settings, Open in browser, Reload, Troubleshooting, and Quit.
 - Opening GmailDock again focuses the running window instead of creating another tray icon.
 - Keeps non-Google links out of the app window: they open in your default browser. Turn this off in Settings if a sign-in flow needs to stay inside GmailDock.
 - Shows a notification when a download finishes.
 - Writes a log file; open it from the tray (Troubleshooting, Open logs folder) when reporting a problem.
-- Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
-- Shows release notes and an Update now button in a dialog when an update is available.
+- Remembers the window size, position, and zoom level between launches.
+- Checks for updates in the background every 30 minutes when enabled. Settings shows the release notes, download progress, and a Skip this version button.
+- Shows release notes and an Update now button in Settings when an update is available.
 - Can start automatically when you sign in; this is on by default and can be changed in Settings.
 - Settings includes an About section with the developer profile and source repository.
 - Supports Google account popups used by Gmail's Add another account action.
-- Shows your Inbox unread count as a taskbar or dock badge. Other mailboxes never change it.
+- Shows your Inbox unread count as a taskbar or dock badge, in the window title, and in the tray tooltip. Other mailboxes never change it.
 - Optional desktop notifications when new mail arrives while the window is not focused.
-- Press Ctrl+Shift+G (Cmd+Shift+G on macOS) to show or hide the window from anywhere.
-- Zoom in or out from Settings; the level is remembered. Gmail's own theme controls light and dark mode.
+- Press Ctrl+Shift+G (Cmd+Shift+G on macOS) to show or hide the window from anywhere. Change or disable it in Settings.
+- Gmail's own theme controls light and dark mode; the Settings window follows your system theme.
 - Can start minimized to the tray when launched at login.
 
 > [!IMPORTANT]

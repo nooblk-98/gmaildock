@@ -15,6 +15,8 @@ const html = `<!doctype html>
     <div role="navigation">
       <a href="https://mail.google.com/mail/u/0/#inbox" aria-label="Inbox 42 unread">Inbox</a>
     </div>
+    <a href="https://myaccount.google.com/" aria-label="Manage your Google Account">Account</a>
+    <a href="https://www.google.com/intl/en/about/products" aria-label="Google apps">Apps</a>
   </body>
 </html>`;
 
@@ -30,24 +32,7 @@ window.__TAURI__ = {
   core: {
     invoke: async (command, args) => {
       invokes.push({ command, args });
-      switch (command) {
-        case 'get_settings':
-          return {
-            autoCheckUpdates: true,
-            closeToTray: true,
-            notifications: true,
-            openExternalInBrowser: true,
-            startAtLogin: true,
-            startMinimized: false,
-            zoom: 1,
-          };
-        case 'get_app_version':
-          return '0.0.0-test';
-        case 'check_for_updates':
-          return null;
-        default:
-          return undefined;
-      }
+      return undefined;
     },
   },
 };
@@ -55,29 +40,18 @@ window.__TAURI__ = {
 window.eval(source);
 await new Promise((resolve) => setTimeout(resolve, 100));
 
-const host = window.document.querySelector('#gmaildock-controls');
-assert(host, 'settings host was not mounted');
-assert.equal(
-  window.document.querySelectorAll('#gmaildock-controls').length,
-  1,
-  'settings host was mounted more than once',
-);
-
 const unread = invokes.find((call) => call.command === 'set_unread_count');
 assert(unread, 'injected.js did not report the unread count');
 assert.equal(unread.args.count, 42);
 
-const panel = host.shadowRoot.querySelector('section');
-assert.equal(panel.style.display, 'none', 'settings panel starts closed');
+const account = window.document.querySelector('a[href*="myaccount.google.com"]');
+assert.equal(account.style.display, 'none', 'account link was not hidden');
 
-window.__gmaildockOpenSettings();
-assert.equal(panel.style.display, 'block', 'settings panel did not open');
+const apps = window.document.querySelector('a[href*="about/products"]');
+assert.equal(apps.style.display, 'none', 'Google apps link was not hidden');
 
-const labels = [...panel.querySelectorAll('label')].map((label) => label.textContent);
-assert(
-  labels.some((label) => label.includes('Open non-Google links in my browser')),
-  'external link setting is missing from the settings panel',
-);
+assert.equal(window.document.querySelector('#gmaildock-controls'), null, 'no page UI should be injected');
+assert.equal(window.__gmaildockOpenSettings, undefined, 'settings no longer live in the page');
 
 window.close();
 console.log('ui checks passed');

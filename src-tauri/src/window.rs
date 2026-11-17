@@ -15,9 +15,9 @@ use crate::{
     badge::WINDOW_TITLE,
     downloads,
     settings::{AppSettings, SettingsStore},
-    PendingSettings,
 };
 
+pub const LABEL: &str = "main";
 pub const GMAIL_URL: &str = "https://mail.google.com/";
 pub const ACCOUNTS_URL: &str =
     "https://accounts.google.com/AccountChooser?service=mail&continue=https://mail.google.com/mail/";
@@ -27,13 +27,13 @@ pub const MINIMIZED_ARG: &str = "--minimized";
 const REVEAL_FALLBACK: Duration = Duration::from_secs(4);
 
 pub fn show_main_window(app: &AppHandle) -> Option<WebviewWindow> {
-    let window = app.get_webview_window("main")?;
+    let window = app.get_webview_window(LABEL)?;
     reveal(&window);
     Some(window)
 }
 
 pub fn toggle_window(app: &AppHandle) {
-    let Some(window) = app.get_webview_window("main") else {
+    let Some(window) = app.get_webview_window(LABEL) else {
         return;
     };
     if window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false) {
@@ -43,29 +43,10 @@ pub fn toggle_window(app: &AppHandle) {
     }
 }
 
-pub fn open_settings(app: &AppHandle) {
-    let Some(window) = show_main_window(app) else {
-        return;
-    };
-
-    if is_gmail(&window) {
-        let _ = window.eval("window.__gmaildockOpenSettings?.()");
-        return;
-    }
-
-    app.state::<PendingSettings>()
-        .0
-        .store(true, Ordering::Relaxed);
-    if let Ok(url) = tauri::Url::parse(GMAIL_URL) {
-        if let Err(error) = window.navigate(url) {
-            log::warn!("could not load Gmail: {error}");
-        }
-    }
-}
-
 pub fn create(app: &AppHandle, settings: AppSettings) -> tauri::Result<WebviewWindow> {
     let start_hidden = settings.start_minimized && std::env::args().any(|arg| arg == MINIMIZED_ARG);
-    let show_on_load = !start_hidden;
+    let open_settings = std::env::args().any(|arg| arg == crate::settings_window::ARG);
+    let show_on_load = !start_hidden && !open_settings;
 
     let revealed = Arc::new(AtomicBool::new(false));
     let page_revealed = Arc::clone(&revealed);
@@ -74,7 +55,7 @@ pub fn create(app: &AppHandle, settings: AppSettings) -> tauri::Result<WebviewWi
 
     let gmail_url = tauri::Url::parse(GMAIL_URL).map_err(std::io::Error::other)?;
     let window =
-        tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(gmail_url))
+        tauri::WebviewWindowBuilder::new(app, LABEL, tauri::WebviewUrl::External(gmail_url))
             .title(WINDOW_TITLE)
             .visible(false)
             .inner_size(1200.0, 780.0)
@@ -89,14 +70,6 @@ pub fn create(app: &AppHandle, settings: AppSettings) -> tauri::Result<WebviewWi
                     && !page_revealed.swap(true, Ordering::Relaxed)
                 {
                     reveal(&window);
-                }
-                if window
-                    .app_handle()
-                    .state::<PendingSettings>()
-                    .0
-                    .swap(false, Ordering::Relaxed)
-                {
-                    let _ = window.eval("window.__gmaildockOpenSettings?.()");
                 }
             })
             .on_navigation(move |url| {
@@ -129,7 +102,7 @@ pub fn create(app: &AppHandle, settings: AppSettings) -> tauri::Result<WebviewWi
             if revealed.swap(true, Ordering::Relaxed) {
                 return;
             }
-            if let Some(window) = app.get_webview_window("main") {
+            if let Some(window) = app.get_webview_window(LABEL) {
                 if !window.is_visible().unwrap_or(false) {
                     log::info!("showing the window before Gmail finished loading");
                     reveal(&window);
@@ -145,13 +118,6 @@ fn reveal(window: &WebviewWindow) {
     let _ = window.show();
     let _ = window.unminimize();
     let _ = window.set_focus();
-}
-
-fn is_gmail(window: &WebviewWindow) -> bool {
-    window
-        .url()
-        .map(|url| url.host_str() == Some("mail.google.com"))
-        .unwrap_or(false)
 }
 
 pub fn allow_in_app(url: &tauri::Url, open_external_in_browser: bool) -> bool {

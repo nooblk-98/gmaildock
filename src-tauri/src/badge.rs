@@ -1,4 +1,7 @@
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::{
+    sync::atomic::{AtomicI64, Ordering},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use tauri::{Manager, State, WebviewWindow};
 use tauri_plugin_notification::NotificationExt;
@@ -7,12 +10,20 @@ use crate::{settings::SettingsStore, tray::TRAY_ID};
 
 pub const WINDOW_TITLE: &str = "GmailDock";
 
-/// Last Inbox unread count reported by the page; -1 until the first report.
-pub struct UnreadState(AtomicI64);
+/// Suppresses a burst of notifications while mail keeps arriving.
+const NOTIFICATION_COOLDOWN_SECS: i64 = 60;
+
+pub struct UnreadState {
+    count: AtomicI64,
+    last_notification: AtomicI64,
+}
 
 impl UnreadState {
     pub fn new() -> Self {
-        Self(AtomicI64::new(-1))
+        Self {
+            count: AtomicI64::new(-1),
+            last_notification: AtomicI64::new(0),
+        }
     }
 }
 
@@ -45,6 +56,13 @@ fn notification_body(count: u32) -> String {
     }
 }
 
+fn unix_seconds() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|duration| duration.as_secs() as i64)
+        .unwrap_or_default()
+}
+
 #[tauri::command]
 pub fn set_unread_count(
     window: WebviewWindow,
@@ -52,7 +70,7 @@ pub fn set_unread_count(
     store: State<'_, SettingsStore>,
     count: u32,
 ) -> Result<(), String> {
-    let previous = state.0.swap(i64::from(count), Ordering::Relaxed);
+    let previous = state.count.swap(i64::from(count), Ordering::Relaxed);
 
     if let Err(error) = window.set_title(&window_title(count)) {
         log::debug!("could not update the window title: {error}");
@@ -62,13 +80,21 @@ pub fn set_unread_count(
             log::debug!("could not update the tray tooltip: {error}");
         }
     }
-
     if let Err(error) = apply_badge(&window, count) {
         log::debug!("could not update the unread badge: {error}");
     }
 
     let new_mail = previous >= 0 && i64::from(count) > previous;
-    if new_mail && !window.is_focused().unwrap_or(false) && store.snapshot().notifications {
+    let cooling_down = unix_seconds() - state.last_notification.load(Ordering::Relaxed)
+        < NOTIFICATION_COOLDOWN_SECS;
+    if new_mail
+        && !cooling_down
+        && !window.is_focused().unwrap_or(false)
+        && store.snapshot().notifications
+    {
+        state
+            .last_notification
+            .store(unix_seconds(), Ordering::Relaxed);
         if let Err(error) = window
             .app_handle()
             .notification()

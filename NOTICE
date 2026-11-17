@@ -1,0 +1,11 @@
+GmailDock is an independent, unofficial desktop wrapper for Gmail.
+
+Gmail and Google are trademarks of Google LLC. This project is not
+affiliated with, endorsed by, or sponsored by Google. The application icon
+adapts Google's Gmail artwork to identify the wrapped service, following
+Google's guidance for internal communications. Replace the icon in
+`src-tauri/icons` if you redistribute this project under different branding.
+
+Tauri, WebView2, WebKitGTK, and the other dependencies are covered by their
+own licenses. See `src-tauri/Cargo.lock` and `package-lock.json` for the
+exact versions.

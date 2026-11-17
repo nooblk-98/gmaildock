@@ -3,23 +3,19 @@
 mod badge;
 mod downloads;
 mod settings;
+mod settings_window;
+mod shortcut;
 mod tray;
 mod updater;
 mod window;
 
-use std::sync::atomic::AtomicBool;
-
 use tauri::{Manager, WindowEvent};
 use tauri_plugin_autostart::MacosLauncher;
-use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_window_state::StateFlags;
 
-use crate::{badge::UnreadState, settings::SettingsStore, window::MINIMIZED_ARG};
-
-const TOGGLE_SHORTCUT: &str = "CommandOrControl+Shift+G";
-
-/// Set when the Settings panel should open once Gmail finishes loading.
-#[derive(Default)]
-pub struct PendingSettings(pub AtomicBool);
+use crate::{
+    badge::UnreadState, settings::SettingsStore, updater::UpdateState, window::MINIMIZED_ARG,
+};
 
 fn main() -> tauri::Result<()> {
     tauri::Builder::default()
@@ -35,8 +31,14 @@ fn main() -> tauri::Result<()> {
                 ])
                 .build(),
         )
-        .plugin(tauri_plugin_single_instance::init(|app, _, _| {
-            let _ = window::show_main_window(app);
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _| {
+            if argv.iter().any(|arg| arg == settings_window::ARG) {
+                if let Err(error) = settings_window::open(app) {
+                    log::warn!("could not open the settings window: {error}");
+                }
+            } else {
+                let _ = window::show_main_window(app);
+            }
         }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
@@ -45,9 +47,22 @@ fn main() -> tauri::Result<()> {
         .plugin(tauri_plugin_notification::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_state_flags(
+                    StateFlags::SIZE
+                        | StateFlags::POSITION
+                        | StateFlags::MAXIMIZED
+                        | StateFlags::FULLSCREEN,
+                )
+                .build(),
+        )
         .manage(UnreadState::new())
-        .manage(PendingSettings::default())
+        .manage(UpdateState::default())
         .on_window_event(|window, event| {
+            if window.label() != window::LABEL {
+                return;
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let settings = window.app_handle().state::<SettingsStore>().snapshot();
@@ -65,6 +80,7 @@ fn main() -> tauri::Result<()> {
             settings::get_settings,
             settings::save_settings,
             updater::check_for_updates,
+            updater::get_update_state,
             updater::install_update,
             updater::get_app_version,
             updater::open_about_link,
@@ -85,20 +101,16 @@ fn main() -> tauri::Result<()> {
                 }
             }
 
-            // The shortcut may be taken by another app or unsupported (e.g. Wayland).
-            if let Err(error) =
-                app.global_shortcut()
-                    .on_shortcut(TOGGLE_SHORTCUT, |app, _, event| {
-                        if event.state() == ShortcutState::Pressed {
-                            window::toggle_window(app);
-                        }
-                    })
-            {
-                log::warn!("global shortcut {TOGGLE_SHORTCUT} is unavailable: {error}");
+            if let Err(error) = shortcut::register(app.handle(), settings.shortcut.as_deref()) {
+                log::warn!("global shortcut is unavailable: {error}");
             }
 
             tray::build(app.handle())?;
             window::create(app.handle(), settings)?;
+            if std::env::args().any(|arg| arg == settings_window::ARG) {
+                settings_window::open(app.handle())?;
+            }
+            updater::spawn_background_checks(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
