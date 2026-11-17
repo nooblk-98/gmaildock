@@ -12,7 +12,7 @@ const CHECK_INTERVAL: Duration = Duration::from_secs(30 * 60);
 
 #[derive(Clone, Serialize)]
 pub struct AvailableUpdate {
-    version: String,
+    pub version: String,
     notes: Option<String>,
 }
 
@@ -42,12 +42,14 @@ struct UpdateProgress {
 }
 
 #[tauri::command]
-pub async fn check_for_updates(
-    app: AppHandle,
-    state: State<'_, UpdateState>,
-) -> Result<Option<AvailableUpdate>, String> {
-    let update = lookup(&app).await?;
-    state.store(update.clone());
+pub async fn check_for_updates(app: AppHandle) -> Result<Option<AvailableUpdate>, String> {
+    refresh(&app).await
+}
+
+/// Checks for an update, caches the result and announces it to open windows.
+pub async fn refresh(app: &AppHandle) -> Result<Option<AvailableUpdate>, String> {
+    let update = lookup(app).await?;
+    app.state::<UpdateState>().store(update.clone());
 
     if let Some(update) = &update {
         if let Err(error) = app.emit("update-available", update.clone()) {
@@ -153,6 +155,35 @@ fn check_in_background(app: &AppHandle) {
         .unwrap_or(false);
     if !already_announced && settings.notifications {
         notify(app, &update);
+    }
+}
+
+/// Tray "Check for updates": opens Settings when an update exists, otherwise reports the result.
+pub fn check_from_tray(app: AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        match refresh(&app).await {
+            Ok(Some(update)) => {
+                log::info!("update {} is available", update.version);
+                if let Err(error) = crate::settings_window::open(&app) {
+                    log::warn!("could not open the settings window: {error}");
+                }
+            }
+            Ok(None) => show(
+                &app,
+                "GmailDock is up to date",
+                "You have the latest version.",
+            ),
+            Err(error) => {
+                log::warn!("could not check for updates: {error}");
+                show(&app, "Update check failed", "See the log file for details.");
+            }
+        }
+    });
+}
+
+fn show(app: &AppHandle, title: &str, body: &str) {
+    if let Err(error) = app.notification().builder().title(title).body(body).show() {
+        log::warn!("could not show a notification: {error}");
     }
 }
 
