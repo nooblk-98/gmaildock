@@ -25,6 +25,11 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 - Can start automatically when you sign in; this is on by default and can be changed in Settings.
 - Settings includes an About section with the developer profile and source repository.
 - Supports Google account popups used by Gmail's Add another account action.
+- Shows your Inbox unread count as a taskbar or dock badge. Other mailboxes never change it.
+- Optional desktop notifications when new mail arrives while the window is not focused.
+- Press Ctrl+Shift+G (Cmd+Shift+G on macOS) to show or hide the window from anywhere.
+- Zoom in or out from Settings; the level is remembered. Gmail's own theme controls light and dark mode.
+- Can start minimized to the tray when launched at login.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
@@ -50,13 +55,17 @@ To build a local installer, run `npm run build`. The bundles are written under `
 
 GmailDock is currently tested hands-on on Windows. The release workflow builds macOS and Linux packages, but those platforms need more real-world testing. If you use macOS or Linux, please try a release and [open an issue](https://github.com/nooblk-98/gmaildock/issues) with your OS version, package type, steps to reproduce, and any error you see.
 
-Contributions are welcome, especially for macOS and Linux compatibility, account sign-in behavior, accessibility, and the update experience. Please open an issue or pull request in the [repository](https://github.com/nooblk-98/gmaildock).
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, checks, and the release process. Issue templates ask for the details testers need to share. Contributions are welcome, especially for macOS and Linux compatibility, account sign-in behavior, accessibility, and the update experience. Please open an issue or pull request in the [repository](https://github.com/nooblk-98/gmaildock).
 
 ## Releases and updates
 
 The [release workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux packages. A version tag creates a signed release and `latest.json` for the in-app updater. The updater checks this repository's [latest release](https://github.com/nooblk-98/gmaildock/releases/latest).
 
-Maintainers: update the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, add `.github/release-notes/vX.Y.Z.md`, then push a matching tag. The notes are included in the release and in-app update dialog. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
+Maintainers: run `npm run release -- X.Y.Z` to bump every version file and draft `.github/release-notes/vX.Y.Z.md` from commit messages, edit the notes, then commit and push a matching tag (or add `--push`). The notes are included in the release and in-app update dialog. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
+
+## Privacy
+
+GmailDock only wraps the Gmail website. It does not read, upload, or store your mail, and it has no servers of its own. The only data it saves locally is a small settings file (update, tray, notification, zoom, and startup preferences). Your Google session lives in the system webview, as in a browser. The updater contacts GitHub to look for new releases.
 
 ## About this project
 

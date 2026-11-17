@@ -1,15 +1,24 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-use std::{fs, io::ErrorKind, path::PathBuf};
+use std::{
+    fs,
+    io::ErrorKind,
+    path::PathBuf,
+    sync::atomic::{AtomicI64, Ordering},
+};
 
 use serde::{Deserialize, Serialize};
 use tauri::{menu::MenuBuilder, tray::TrayIconBuilder, webview::NewWindowResponse, Manager};
 use tauri_plugin_autostart::MacosLauncher;
 #[cfg(not(debug_assertions))]
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 
 const GMAIL_URL: &str = "https://mail.google.com/";
+const TOGGLE_SHORTCUT: &str = "CommandOrControl+Shift+G";
+const MINIMIZED_ARG: &str = "--minimized";
 const SETTINGS_FILE: &str = "settings.json";
 const DEVELOPER_URL: &str = "https://github.com/nooblk-98";
 const REPOSITORY_URL: &str = "https://github.com/nooblk-98/gmaildock";
@@ -27,6 +36,9 @@ struct AppSettings {
     auto_check_updates: bool,
     close_to_tray: bool,
     start_at_login: bool,
+    notifications: bool,
+    start_minimized: bool,
+    zoom: f64,
 }
 
 impl Default for AppSettings {
@@ -35,6 +47,9 @@ impl Default for AppSettings {
             auto_check_updates: true,
             close_to_tray: true,
             start_at_login: true,
+            notifications: true,
+            start_minimized: false,
+            zoom: 1.0,
         }
     }
 }
@@ -45,6 +60,30 @@ fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
         .map(|dir| dir.join(SETTINGS_FILE))
         .map_err(|error| error.to_string())
 }
+
+fn clamp_zoom(zoom: f64) -> f64 {
+    if zoom.is_finite() {
+        zoom.clamp(0.5, 2.0)
+    } else {
+        1.0
+    }
+}
+
+fn toggle_window(app: &tauri::AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    if window.is_visible().unwrap_or(false) && window.is_focused().unwrap_or(false) {
+        let _ = window.hide();
+    } else {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
+
+/// Last Inbox unread count reported by the page; -1 until the first report.
+struct UnreadState(AtomicI64);
 
 #[tauri::command]
 fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
@@ -57,7 +96,13 @@ fn get_settings(app: tauri::AppHandle) -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-fn save_settings(app: tauri::AppHandle, settings: AppSettings) -> Result<(), String> {
+fn save_settings(app: tauri::AppHandle, mut settings: AppSettings) -> Result<(), String> {
+    settings.zoom = clamp_zoom(settings.zoom);
+    if let Some(window) = app.get_webview_window("main") {
+        window
+            .set_zoom(settings.zoom)
+            .map_err(|error| error.to_string())?;
+    }
     #[cfg(not(debug_assertions))]
     {
         let autolaunch = app.autolaunch();
@@ -198,6 +243,23 @@ fn badge_image(count: u32) -> tauri::image::Image<'static> {
 
 #[tauri::command]
 fn set_unread_count(window: tauri::WebviewWindow, count: u32) -> Result<(), String> {
+    let app = window.app_handle();
+    let previous = app
+        .state::<UnreadState>()
+        .0
+        .swap(i64::from(count), Ordering::Relaxed);
+    let wants_notification = previous >= 0
+        && i64::from(count) > previous
+        && !window.is_focused().unwrap_or(false)
+        && get_settings(app.clone()).unwrap_or_default().notifications;
+    if wants_notification {
+        let _ = app
+            .notification()
+            .builder()
+            .title("GmailDock")
+            .body(format!("{count} unread in your Inbox"))
+            .show();
+    }
     #[cfg(target_os = "windows")]
     let result = window.set_overlay_icon((count > 0).then(|| badge_image(count)));
     #[cfg(not(target_os = "windows"))]
@@ -215,8 +277,11 @@ fn main() -> tauri::Result<()> {
         }))
         .plugin(tauri_plugin_autostart::init(
             MacosLauncher::LaunchAgent,
-            None,
+            Some(vec![MINIMIZED_ARG]),
         ))
+        .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .manage(UnreadState(AtomicI64::new(-1)))
         .plugin(tauri_plugin_updater::Builder::new().build())
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
@@ -252,6 +317,17 @@ fn main() -> tauri::Result<()> {
                     }
                 }
             }
+            let settings = get_settings(app.handle().clone()).unwrap_or_default();
+            // Ignore failures: the shortcut may be taken by another app or unsupported (e.g. Wayland).
+            let _ = app
+                .global_shortcut()
+                .on_shortcut(TOGGLE_SHORTCUT, |app, _, event| {
+                    if event.state() == ShortcutState::Pressed {
+                        toggle_window(app);
+                    }
+                });
+            let start_hidden =
+                settings.start_minimized && std::env::args().any(|arg| arg == MINIMIZED_ARG);
             let menu = MenuBuilder::new(app)
                 .text("show", "Show GmailDock")
                 .separator()
@@ -279,6 +355,7 @@ fn main() -> tauri::Result<()> {
             let url = tauri::Url::parse(GMAIL_URL)?;
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
                 .title("GmailDock")
+                .visible(!start_hidden)
                 .inner_size(1200.0, 780.0)
                 .min_inner_size(780.0, 540.0)
                 .initialization_script_for_all_frames(include_str!("injected.js"))
@@ -293,6 +370,11 @@ fn main() -> tauri::Result<()> {
                     }
                 })
                 .build()?;
+            if let Some(window) = app.get_webview_window("main") {
+                if let Err(error) = window.set_zoom(clamp_zoom(settings.zoom)) {
+                    eprintln!("failed to restore GmailDock zoom: {error}");
+                }
+            }
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -308,6 +390,17 @@ mod tests {
         let settings: AppSettings = serde_json::from_str(saved).expect("valid settings JSON");
         assert!(settings.close_to_tray);
         assert!(settings.start_at_login);
+        assert!(settings.notifications);
+        assert!(!settings.start_minimized);
+        assert_eq!(settings.zoom, 1.0);
+    }
+
+    #[test]
+    fn zoom_is_clamped_to_a_usable_range() {
+        assert_eq!(super::clamp_zoom(0.1), 0.5);
+        assert_eq!(super::clamp_zoom(9.0), 2.0);
+        assert_eq!(super::clamp_zoom(f64::NAN), 1.0);
+        assert_eq!(super::clamp_zoom(1.25), 1.25);
     }
 
     #[test]

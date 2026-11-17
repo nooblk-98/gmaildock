@@ -50,8 +50,39 @@ jobs:
               --notes-file ".github/release-notes/$GITHUB_REF_NAME.md"
           fi
 
+  check:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Regression checks
+        run: node scripts/check.mjs
+      - name: Install Linux dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev patchelf
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: check
+      - name: Format
+        run: cargo fmt --check
+        working-directory: src-tauri
+      - name: Clippy
+        run: cargo clippy --all-targets -- -D warnings
+        working-directory: src-tauri
+      - name: Tests
+        run: cargo test
+        working-directory: src-tauri
+
   build:
-    needs: validate
+    needs: [validate, check]
     strategy:
       fail-fast: false
       matrix:

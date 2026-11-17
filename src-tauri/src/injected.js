@@ -41,23 +41,39 @@
     if (location.hostname !== 'mail.google.com') return;
 
     let unreadCount;
+    let missingSince;
+    // <unread-parse>
+    function parseInboxCount(text) {
+      const match = /(?:^|\D)(\d[\d,]*)/.exec(text || '');
+      return match ? Number(match[1].replaceAll(',', '')) : 0;
+    }
+    // </unread-parse>
+    function findInboxLink() {
+      const links = [...document.querySelectorAll('a[href$="#inbox"]')];
+      const inNav = links.find((link) => link.closest('[role="navigation"], .aeN, .wT'));
+      if (inNav || links.length === 1) return inNav || links[0];
+      // Fallback for markup changes: any navigation entry labelled "Inbox".
+      return document.querySelector('[role="navigation"] [aria-label^="Inbox"], [role="navigation"] a[title^="Inbox"]');
+    }
     function inboxUnread() {
       // Only the Inbox sidebar entry counts; other labels (Spam, Drafts, ...) are ignored.
-      const links = document.querySelectorAll('a[href$="#inbox"]');
-      for (const link of links) {
-        const nav = link.closest('[role="navigation"], .aeN, .wT');
-        if (!nav && links.length > 1) continue;
-        const text = `${link.getAttribute('aria-label') || ''} ${link.textContent || ''}`;
-        const match = /(?:^|\D)(\d[\d,]*)/.exec(text);
-        return match ? Number(match[1].replaceAll(',', '')) : 0;
-      }
-      return undefined;
+      const link = findInboxLink();
+      if (!link) return undefined;
+      return parseInboxCount(`${link.getAttribute('aria-label') || ''} ${link.textContent || ''}`);
     }
     function syncUnreadCount() {
       const found = inboxUnread();
       // Sidebar not rendered yet: keep the last known value instead of falling back to the tab title,
       // because the title shows the count of whichever view is open.
-      if (found === undefined) return;
+      if (found === undefined) {
+        missingSince ??= Date.now();
+        if (Date.now() - missingSince > 60000 && missingSince !== -1) {
+          missingSince = -1;
+          console.warn('GmailDock: could not find the Inbox entry; the unread badge may be out of date.');
+        }
+        return;
+      }
+      missingSince = undefined;
       if (!Number.isSafeInteger(found) || found === unreadCount) return;
       unreadCount = found;
       window.__TAURI__.core.invoke('set_unread_count', { count: found }).catch((error) => {
@@ -117,6 +133,32 @@
     const autoUpdates = addOption('Check for updates automatically');
     const closeToTray = addOption('Keep running in tray when closing');
     const startAtLogin = addOption('Start automatically at login');
+    const startMinimized = addOption('Start minimized to tray at login');
+    const notifications = addOption('Notify me about new mail');
+    const options = [autoUpdates, closeToTray, startAtLogin, startMinimized, notifications];
+
+    const zoomRow = make('div');
+    Object.assign(zoomRow.style, { display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', minHeight: '48px', borderTop: '1px solid #eef1f1' });
+    const zoomLabel = make('span', 'Zoom');
+    const zoomControls = make('div');
+    Object.assign(zoomControls.style, { display: 'flex', alignItems: 'center', gap: '8px' });
+    const zoomOut = make('button', '−');
+    const zoomValue = make('span', '100%');
+    const zoomIn = make('button', '+');
+    for (const button of [zoomOut, zoomIn]) {
+      button.type = 'button';
+      Object.assign(button.style, { width: '28px', height: '28px', border: '1px solid #d5e4e1', borderRadius: '8px', background: '#f1f8f6', color: '#086f69', font: '600 15px system-ui, sans-serif', cursor: 'pointer' });
+    }
+    zoomOut.setAttribute('aria-label', 'Zoom out');
+    zoomIn.setAttribute('aria-label', 'Zoom in');
+    Object.assign(zoomValue.style, { minWidth: '40px', textAlign: 'center' });
+    zoomControls.append(zoomOut, zoomValue, zoomIn);
+    zoomRow.append(zoomLabel, zoomControls);
+    panel.append(zoomRow);
+
+    const shortcutHint = make('p', 'Tip: press Ctrl+Shift+G (⌘⇧G on macOS) to show or hide GmailDock.');
+    Object.assign(shortcutHint.style, { margin: '10px 0 0', color: '#64737a', font: '12px system-ui, sans-serif' });
+    panel.append(shortcutHint);
     const checkNow = make('button', 'Check for updates now');
     checkNow.type = 'button';
     Object.assign(checkNow.style, { width: '100%', marginTop: '13px', padding: '10px', border: '1px solid #d5e4e1', borderRadius: '10px', background: '#f1f8f6', color: '#086f69', font: '600 13px system-ui, sans-serif', cursor: 'pointer' });
@@ -171,7 +213,7 @@
     overlay.append(dialog);
     ui.append(panel, bar, overlay);
     document.body.append(host);
-    let settings = { autoCheckUpdates: true, closeToTray: true, startAtLogin: true };
+    let settings = { autoCheckUpdates: true, closeToTray: true, startAtLogin: true, notifications: true, startMinimized: false, zoom: 1 };
     let availableUpdate;
     let announcedVersion;
     let checking = false;
@@ -228,27 +270,36 @@
       }
     }
 
+    function syncControls() {
+      autoUpdates.checked = settings.autoCheckUpdates;
+      closeToTray.checked = settings.closeToTray;
+      startAtLogin.checked = settings.startAtLogin;
+      startMinimized.checked = settings.startMinimized;
+      notifications.checked = settings.notifications;
+      zoomValue.textContent = `${Math.round(settings.zoom * 100)}%`;
+    }
+
+    function stepZoom(delta) {
+      const next = Math.min(2, Math.max(0.5, Math.round((settings.zoom + delta) * 100) / 100));
+      if (next !== settings.zoom) changeSetting('zoom', next);
+    }
+
     async function changeSetting(key, value) {
       const previous = settings;
       settings = { ...settings, [key]: value };
+      syncControls();
       if (key === 'autoCheckUpdates') scheduleChecks();
-      autoUpdates.disabled = true;
-      closeToTray.disabled = true;
-      startAtLogin.disabled = true;
+      options.forEach((option) => { option.disabled = true; });
       try {
         await window.__TAURI__.core.invoke('save_settings', { settings });
         status.textContent = 'Settings saved.';
       } catch (error) {
         settings = previous;
-        autoUpdates.checked = settings.autoCheckUpdates;
-        closeToTray.checked = settings.closeToTray;
-        startAtLogin.checked = settings.startAtLogin;
+        syncControls();
         scheduleChecks();
         status.textContent = `Could not save settings: ${error}`;
       } finally {
-        autoUpdates.disabled = false;
-        closeToTray.disabled = false;
-        startAtLogin.disabled = false;
+        options.forEach((option) => { option.disabled = false; });
       }
     }
 
@@ -273,6 +324,10 @@
     autoUpdates.addEventListener('change', () => changeSetting('autoCheckUpdates', autoUpdates.checked));
     closeToTray.addEventListener('change', () => changeSetting('closeToTray', closeToTray.checked));
     startAtLogin.addEventListener('change', () => changeSetting('startAtLogin', startAtLogin.checked));
+    startMinimized.addEventListener('change', () => changeSetting('startMinimized', startMinimized.checked));
+    notifications.addEventListener('change', () => changeSetting('notifications', notifications.checked));
+    zoomOut.addEventListener('click', () => stepZoom(-0.1));
+    zoomIn.addEventListener('click', () => stepZoom(0.1));
     checkNow.addEventListener('click', () => checkUpdates(true));
     developerLink.addEventListener('click', () => window.__TAURI__.core.invoke('open_about_link', { link: 'developer' }).catch((error) => { status.textContent = `Could not open link: ${error}`; }));
     repositoryLink.addEventListener('click', () => window.__TAURI__.core.invoke('open_about_link', { link: 'repository' }).catch((error) => { status.textContent = `Could not open link: ${error}`; }));
@@ -299,10 +354,8 @@
     });
 
     window.__TAURI__.core.invoke('get_settings').then((saved) => {
-      settings = saved;
-      autoUpdates.checked = settings.autoCheckUpdates;
-      closeToTray.checked = settings.closeToTray;
-      startAtLogin.checked = settings.startAtLogin;
+      settings = { ...settings, ...saved };
+      syncControls();
       scheduleChecks();
     }).catch((error) => {
       status.textContent = `Could not load settings: ${error}`;
