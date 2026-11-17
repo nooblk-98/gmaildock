@@ -131,6 +131,80 @@ async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     app.restart();
 }
 
+#[cfg(target_os = "windows")]
+fn badge_image(count: u32) -> tauri::image::Image<'static> {
+    const SIZE: usize = 32;
+    const GLYPHS: [[u8; 5]; 11] = [
+        [0b111, 0b101, 0b101, 0b101, 0b111],
+        [0b010, 0b110, 0b010, 0b010, 0b111],
+        [0b111, 0b001, 0b111, 0b100, 0b111],
+        [0b111, 0b001, 0b111, 0b001, 0b111],
+        [0b101, 0b101, 0b111, 0b001, 0b001],
+        [0b111, 0b100, 0b111, 0b001, 0b111],
+        [0b111, 0b100, 0b111, 0b101, 0b111],
+        [0b111, 0b001, 0b010, 0b010, 0b010],
+        [0b111, 0b101, 0b111, 0b101, 0b111],
+        [0b111, 0b101, 0b111, 0b001, 0b111],
+        [0b000, 0b010, 0b111, 0b010, 0b000],
+    ];
+    let label = if count > 99 {
+        "99+".to_owned()
+    } else {
+        count.to_string()
+    };
+    let scale = match label.len() {
+        1 => 4,
+        2 => 3,
+        _ => 2,
+    };
+    let width = (label.len() * 3 + label.len() - 1) * scale;
+    let left = (SIZE - width) / 2;
+    let top = (SIZE - 5 * scale) / 2;
+    let mut rgba = vec![0; SIZE * SIZE * 4];
+    for y in 0..SIZE {
+        for x in 0..SIZE {
+            let dx = x as i32 - 16;
+            let dy = y as i32 - 16;
+            if dx * dx + dy * dy <= 15 * 15 {
+                rgba[(y * SIZE + x) * 4..(y * SIZE + x) * 4 + 4]
+                    .copy_from_slice(&[220, 38, 38, 255]);
+            }
+        }
+    }
+    for (index, digit) in label.bytes().enumerate() {
+        let glyph = if digit == b'+' {
+            10
+        } else {
+            (digit - b'0') as usize
+        };
+        for (row, bits) in GLYPHS[glyph].iter().enumerate() {
+            for column in 0..3 {
+                if bits & (0b100 >> column) == 0 {
+                    continue;
+                }
+                for sy in 0..scale {
+                    for sx in 0..scale {
+                        let x = left + (index * 4 + column) * scale + sx;
+                        let y = top + row * scale + sy;
+                        rgba[(y * SIZE + x) * 4..(y * SIZE + x) * 4 + 4]
+                            .copy_from_slice(&[255, 255, 255, 255]);
+                    }
+                }
+            }
+        }
+    }
+    tauri::image::Image::new_owned(rgba, SIZE as u32, SIZE as u32)
+}
+
+#[tauri::command]
+fn set_unread_count(window: tauri::WebviewWindow, count: u32) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    let result = window.set_overlay_icon((count > 0).then(|| badge_image(count)));
+    #[cfg(not(target_os = "windows"))]
+    let result = window.set_badge_count((count > 0).then_some(i64::from(count)));
+    result.map_err(|error| error.to_string())
+}
+
 fn main() -> tauri::Result<()> {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, _, _| {
@@ -162,6 +236,7 @@ fn main() -> tauri::Result<()> {
         .invoke_handler(tauri::generate_handler![
             check_for_updates,
             install_update,
+            set_unread_count,
             get_app_version,
             open_about_link,
             get_settings,

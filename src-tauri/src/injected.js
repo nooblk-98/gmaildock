@@ -40,6 +40,34 @@
     if (window !== window.top) return;
     if (location.hostname !== 'mail.google.com') return;
 
+    let unreadCount;
+    function inboxUnread() {
+      // Only the Inbox sidebar entry counts; other labels (Spam, Drafts, ...) are ignored.
+      const links = document.querySelectorAll('a[href$="#inbox"]');
+      for (const link of links) {
+        const nav = link.closest('[role="navigation"], .aeN, .wT');
+        if (!nav && links.length > 1) continue;
+        const text = `${link.getAttribute('aria-label') || ''} ${link.textContent || ''}`;
+        const match = /(?:^|\D)(\d[\d,]*)/.exec(text);
+        return match ? Number(match[1].replaceAll(',', '')) : 0;
+      }
+      return undefined;
+    }
+    function syncUnreadCount() {
+      const found = inboxUnread();
+      // Sidebar not rendered yet: keep the last known value instead of falling back to the tab title,
+      // because the title shows the count of whichever view is open.
+      if (found === undefined) return;
+      if (!Number.isSafeInteger(found) || found === unreadCount) return;
+      unreadCount = found;
+      window.__TAURI__.core.invoke('set_unread_count', { count: found }).catch((error) => {
+        console.warn('Could not set GmailDock unread badge:', error);
+      });
+    }
+    new MutationObserver(syncUnreadCount).observe(document.body, { childList: true, subtree: true, characterData: true });
+    syncUnreadCount();
+    setInterval(syncUnreadCount, 5000);
+
     const make = (tag, text) => {
       const element = document.createElement(tag);
       if (text) element.textContent = text;
