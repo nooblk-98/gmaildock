@@ -1,20 +1,28 @@
+//! The tray icon and its menu, which is where every GmailDock setting lives.
+//!
+//! The menu is rebuilt from the current settings and update state whenever either changes,
+//! so its checkmarks and update items never go stale.
+
 use std::fs;
 
 use tauri::{
-    menu::{CheckMenuItem, CheckMenuItemBuilder, MenuBuilder, SubmenuBuilder},
+    menu::{CheckMenuItemBuilder, Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
     AppHandle, Manager, Wry,
 };
+use tauri_plugin_notification::NotificationExt;
 
 use crate::{
     settings::{self, AppSettings, SettingsStore},
-    settings_window, updater, window,
+    updater, window,
 };
 
 pub const TRAY_ID: &str = "gmaildock";
+const REPOSITORY_URL: &str = "https://github.com/nooblk-98/gmaildock";
 
 const PREFERENCE_PREFIX: &str = "pref:";
 const ZOOM_PREFIX: &str = "zoom:";
+const SHORTCUT_PREFIX: &str = "shortcut:";
 
 /// On/off settings shown as checkboxes under Preferences, in menu order.
 const PREFERENCES: [Preference; 6] = [
@@ -50,8 +58,14 @@ const PREFERENCES: [Preference; 6] = [
     },
 ];
 
-/// Zoom levels offered in the tray; matches the Settings window.
-pub const ZOOM_LEVELS: [f64; 8] = [0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0];
+const ZOOM_LEVELS: [f64; 8] = [0.5, 0.75, 0.9, 1.0, 1.1, 1.25, 1.5, 2.0];
+
+/// Global shortcuts offered under Shortcut. The first one is the default.
+const SHORTCUTS: [&str; 3] = [
+    settings::DEFAULT_SHORTCUT,
+    "CommandOrControl+Alt+G",
+    "CommandOrControl+Shift+M",
+];
 
 struct Preference {
     key: &'static str,
@@ -59,72 +73,29 @@ struct Preference {
     field: fn(&mut AppSettings) -> &mut bool,
 }
 
-/// Checkbox items kept so their state can follow settings changed elsewhere.
-struct TrayItems {
-    preferences: Vec<CheckMenuItem<Wry>>,
-    zoom: Vec<CheckMenuItem<Wry>>,
-}
-
 fn same_zoom(a: f64, b: f64) -> bool {
     (a - b).abs() < 0.001
 }
 
+/// Turns an accelerator such as `CommandOrControl+Shift+G` into what the keyboard shows.
+fn shortcut_label(accelerator: &str) -> String {
+    let (control, alt) = if cfg!(target_os = "macos") {
+        ("Cmd", "Option")
+    } else {
+        ("Ctrl", "Alt")
+    };
+    accelerator
+        .split('+')
+        .map(|part| match part {
+            "CommandOrControl" | "CmdOrCtrl" => control,
+            "Alt" | "Option" => alt,
+            other => other,
+        })
+        .collect::<Vec<_>>()
+        .join("+")
+}
+
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
-    let current = app.state::<SettingsStore>().snapshot();
-
-    let preferences = PREFERENCES
-        .iter()
-        .map(|preference| {
-            let mut probe = current.clone();
-            let checked = *(preference.field)(&mut probe);
-            CheckMenuItemBuilder::with_id(
-                format!("{PREFERENCE_PREFIX}{}", preference.key),
-                preference.label,
-            )
-            .checked(checked)
-            .build(app)
-        })
-        .collect::<tauri::Result<Vec<_>>>()?;
-    let zoom = ZOOM_LEVELS
-        .iter()
-        .enumerate()
-        .map(|(index, level)| {
-            CheckMenuItemBuilder::with_id(
-                format!("{ZOOM_PREFIX}{index}"),
-                format!("{}%", (level * 100.0).round()),
-            )
-            .checked(same_zoom(*level, current.zoom))
-            .build(app)
-        })
-        .collect::<tauri::Result<Vec<_>>>()?;
-
-    let mut preferences_menu = SubmenuBuilder::new(app, "Preferences");
-    for item in &preferences {
-        preferences_menu = preferences_menu.item(item);
-    }
-    let mut zoom_menu = SubmenuBuilder::new(app, "Zoom");
-    for item in &zoom {
-        zoom_menu = zoom_menu.item(item);
-    }
-    let troubleshooting = SubmenuBuilder::new(app, "Troubleshooting")
-        .text("open_logs", "Open logs folder")
-        .build()?;
-
-    let menu = MenuBuilder::new(app)
-        .text("accounts", "Accounts...")
-        .text("browser", "Open in browser")
-        .text("reload", "Reload")
-        .separator()
-        .item(&preferences_menu.build()?)
-        .item(&zoom_menu.build()?)
-        .separator()
-        .text("check_updates", "Check for updates")
-        .text("settings", "Settings...")
-        .item(&troubleshooting)
-        .separator()
-        .text("quit", "Quit")
-        .build()?;
-    app.manage(TrayItems { preferences, zoom });
     let icon = app
         .default_window_icon()
         .cloned()
@@ -132,7 +103,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
 
     TrayIconBuilder::with_id(TRAY_ID)
         .icon(icon)
-        .menu(&menu)
+        .menu(&menu(app)?)
         .tooltip("GmailDock")
         .show_menu_on_left_click(false)
         .on_tray_icon_event(|tray, event| {
@@ -151,17 +122,134 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Updates the tray checkboxes to match `settings`.
-pub fn sync(app: &AppHandle, settings: &AppSettings) {
-    let Some(items) = app.try_state::<TrayItems>() else {
+/// Rebuilds the tray menu so it reflects the current settings and update state.
+pub fn refresh(app: &AppHandle) {
+    let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
     };
-    let mut probe = settings.clone();
-    for (preference, item) in PREFERENCES.iter().zip(&items.preferences) {
-        let _ = item.set_checked(*(preference.field)(&mut probe));
+    match menu(app) {
+        Ok(menu) => {
+            if let Err(error) = tray.set_menu(Some(menu)) {
+                log::warn!("could not update the tray menu: {error}");
+            }
+        }
+        Err(error) => log::warn!("could not build the tray menu: {error}"),
     }
-    for (level, item) in ZOOM_LEVELS.iter().zip(&items.zoom) {
-        let _ = item.set_checked(same_zoom(*level, settings.zoom));
+}
+
+fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
+    let current = app.state::<SettingsStore>().snapshot();
+    let updates = updater::status(app);
+
+    let mut preferences = SubmenuBuilder::new(app, "Preferences");
+    for preference in &PREFERENCES {
+        let mut probe = current.clone();
+        let checked = *(preference.field)(&mut probe);
+        preferences = preferences.item(
+            &CheckMenuItemBuilder::with_id(
+                format!("{PREFERENCE_PREFIX}{}", preference.key),
+                preference.label,
+            )
+            .checked(checked)
+            .build(app)?,
+        );
+    }
+
+    let mut zoom = SubmenuBuilder::new(app, "Zoom");
+    for (index, level) in ZOOM_LEVELS.iter().enumerate() {
+        zoom = zoom.item(
+            &CheckMenuItemBuilder::with_id(
+                format!("{ZOOM_PREFIX}{index}"),
+                format!("{}%", (level * 100.0).round()),
+            )
+            .checked(same_zoom(*level, current.zoom))
+            .build(app)?,
+        );
+    }
+
+    let active_shortcut = current
+        .shortcut
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let mut shortcut = SubmenuBuilder::new(app, "Show or hide shortcut");
+    for (index, accelerator) in SHORTCUTS.iter().enumerate() {
+        shortcut = shortcut.item(
+            &CheckMenuItemBuilder::with_id(
+                format!("{SHORTCUT_PREFIX}{index}"),
+                shortcut_label(accelerator),
+            )
+            .checked(active_shortcut == Some(*accelerator))
+            .build(app)?,
+        );
+    }
+    if let Some(custom) = active_shortcut.filter(|value| !SHORTCUTS.contains(value)) {
+        // A shortcut set in an older version stays selected until another one is picked.
+        shortcut = shortcut.item(
+            &CheckMenuItemBuilder::with_id("shortcut:custom", shortcut_label(custom))
+                .checked(true)
+                .build(app)?,
+        );
+    }
+    shortcut = shortcut.separator().item(
+        &CheckMenuItemBuilder::with_id("shortcut:off", "Off")
+            .checked(active_shortcut.is_none())
+            .build(app)?,
+    );
+
+    let troubleshooting = SubmenuBuilder::new(app, "Troubleshooting")
+        .text("open_logs", "Open logs folder")
+        .build()?;
+
+    let version = MenuItemBuilder::with_id(
+        "version",
+        format!("GmailDock {}", app.package_info().version),
+    )
+    .enabled(false)
+    .build(app)?;
+
+    let mut builder = MenuBuilder::new(app)
+        .item(&version)
+        .separator()
+        .text("accounts", "Accounts...")
+        .text("browser", "Open in browser")
+        .text("reload", "Reload")
+        .separator()
+        .item(&preferences.build()?)
+        .item(&zoom.build()?)
+        .item(&shortcut.build()?)
+        .separator();
+
+    if updates.installing {
+        builder = builder.item(
+            &MenuItemBuilder::with_id("installing", "Installing update...")
+                .enabled(false)
+                .build(app)?,
+        );
+    } else if let Some(version) = updates
+        .available
+        .filter(|version| current.skipped_version.as_deref() != Some(version.as_str()))
+    {
+        builder = builder
+            .text("install_update", format!("Install update ({version})"))
+            .text("whats_new", format!("What's new in {version}"))
+            .text("skip_update", format!("Skip {version}"));
+    }
+    builder = builder.text("check_updates", "Check for updates");
+
+    builder
+        .separator()
+        .text("about", "About GmailDock")
+        .item(&troubleshooting)
+        .separator()
+        .text("quit", "Quit")
+        .build()
+}
+
+/// Shows a notification, or logs why it could not be shown.
+pub fn notify(app: &AppHandle, title: &str, body: &str) {
+    if let Err(error) = app.notification().builder().title(title).body(body).show() {
+        log::warn!("could not show a notification: {error}");
     }
 }
 
@@ -170,7 +258,9 @@ fn change_setting(app: &AppHandle, change: impl FnOnce(&mut AppSettings)) {
     change(&mut next);
     if let Err(error) = settings::apply(app, next) {
         log::warn!("could not save the setting from the tray: {error}");
-        sync(app, &app.state::<SettingsStore>().snapshot());
+        notify(app, "GmailDock could not change that setting", &error);
+        // Put the checkmarks back to what is actually saved.
+        refresh(app);
     }
 }
 
@@ -190,9 +280,25 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
         }
         return;
     }
+    if let Some(choice) = id.strip_prefix(SHORTCUT_PREFIX) {
+        match choice {
+            "off" => change_setting(app, |settings| settings.shortcut = None),
+            // Re-selecting the current custom shortcut changes nothing; just keep it checked.
+            "custom" => refresh(app),
+            index => {
+                if let Some(accelerator) =
+                    index.parse::<usize>().ok().and_then(|i| SHORTCUTS.get(i))
+                {
+                    change_setting(app, |settings| {
+                        settings.shortcut = Some((*accelerator).to_owned());
+                    });
+                }
+            }
+        }
+        return;
+    }
 
     match id {
-        "check_updates" => updater::check_from_tray(app.clone()),
         "accounts" => {
             if let Some(window) = window::show_main_window(app) {
                 if let Ok(url) = tauri::Url::parse(window::ACCOUNTS_URL) {
@@ -202,12 +308,7 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                 }
             }
         }
-        "settings" => {
-            if let Err(error) = settings_window::open(app) {
-                log::warn!("could not open the settings window: {error}");
-            }
-        }
-        "browser" => open_in_browser(),
+        "browser" => open_url(window::GMAIL_URL),
         "reload" => {
             if let Some(window) = window::show_main_window(app) {
                 if let Err(error) = window.reload() {
@@ -215,15 +316,28 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
                 }
             }
         }
+        "check_updates" => updater::check_from_tray(app.clone()),
+        "install_update" => updater::install_from_tray(app.clone()),
+        "whats_new" => {
+            if let Some(version) = updater::status(app).available {
+                open_url(&format!("{REPOSITORY_URL}/releases/tag/v{version}"));
+            }
+        }
+        "skip_update" => {
+            if let Some(version) = updater::status(app).available {
+                change_setting(app, |settings| settings.skipped_version = Some(version));
+            }
+        }
+        "about" => open_url(REPOSITORY_URL),
         "open_logs" => open_logs(app),
         "quit" => app.exit(0),
         _ => {}
     }
 }
 
-fn open_in_browser() {
-    if let Err(error) = tauri_plugin_opener::open_url(window::GMAIL_URL, None::<&str>) {
-        log::warn!("could not open Gmail in the browser: {error}");
+fn open_url(url: &str) {
+    if let Err(error) = tauri_plugin_opener::open_url(url, None::<&str>) {
+        log::warn!("could not open {url} in the browser: {error}");
     }
 }
 
@@ -244,8 +358,8 @@ fn open_logs(app: &AppHandle) {
 
 #[cfg(test)]
 mod tests {
-    use super::{PREFERENCES, ZOOM_LEVELS};
-    use crate::settings::AppSettings;
+    use super::{shortcut_label, PREFERENCES, SHORTCUTS, ZOOM_LEVELS};
+    use crate::settings::{clamp_zoom, AppSettings, DEFAULT_SHORTCUT};
 
     #[test]
     fn each_preference_toggles_its_own_field() {
@@ -268,13 +382,26 @@ mod tests {
     }
 
     #[test]
-    fn zoom_levels_match_the_settings_window() {
-        let html = include_str!("../../frontend/settings.html");
+    fn zoom_levels_are_within_the_saved_range() {
         for level in ZOOM_LEVELS {
-            assert!(
-                html.contains(&format!("<option value=\"{level}\">")),
-                "{level} missing from settings.html"
-            );
+            assert_eq!(clamp_zoom(level), level);
         }
+        assert!(ZOOM_LEVELS.contains(&AppSettings::default().zoom));
+    }
+
+    #[test]
+    fn default_shortcut_is_offered() {
+        assert_eq!(SHORTCUTS[0], DEFAULT_SHORTCUT);
+    }
+
+    #[test]
+    fn shortcut_labels_read_like_the_keyboard() {
+        let expected = if cfg!(target_os = "macos") {
+            ["Cmd+Shift+G", "Cmd+Option+G"]
+        } else {
+            ["Ctrl+Shift+G", "Ctrl+Alt+G"]
+        };
+        assert_eq!(shortcut_label(SHORTCUTS[0]), expected[0]);
+        assert_eq!(shortcut_label(SHORTCUTS[1]), expected[1]);
     }
 }

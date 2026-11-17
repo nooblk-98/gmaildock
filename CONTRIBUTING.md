@@ -16,14 +16,14 @@ npm run dev
 ## Before opening a pull request
 
 ```sh
-npm run check                                   # regression checks, injected UI, settings UI
+npm run check                                   # regression checks and the injected Gmail script
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI runs the same checks. The native side lives in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `settings_window.rs`, `updater.rs`, and `downloads.rs`). The Settings window is plain HTML, CSS, and JavaScript in `frontend/`; the small script injected into Gmail is `src-tauri/src/injected.js`.
+CI runs the same checks. The native side lives in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `shortcut.rs`, `updater.rs`, and `downloads.rs`). All settings are tray menu items built in `tray.rs`; there is no separate settings page. The small script injected into Gmail is `src-tauri/src/injected.js`, and it can only call `set_unread_count`.
 
 ## Signing and notarization
 

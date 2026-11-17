@@ -7,7 +7,7 @@ Please do not open a public issue for a security problem.
 Use GitHub's private vulnerability reporting:
 https://github.com/nooblk-98/gmaildock/security/advisories/new
 
-Include the GmailDock version (Settings, About), your platform, and the steps
+Include the GmailDock version (shown at the top of the tray menu), your platform, and the steps
 needed to reproduce the issue.
 
 ## What GmailDock does with your data

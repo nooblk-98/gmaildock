@@ -45,8 +45,7 @@ pub fn toggle_window(app: &AppHandle) {
 
 pub fn create(app: &AppHandle, settings: AppSettings) -> tauri::Result<WebviewWindow> {
     let start_hidden = settings.start_minimized && std::env::args().any(|arg| arg == MINIMIZED_ARG);
-    let open_settings = std::env::args().any(|arg| arg == crate::settings_window::ARG);
-    let show_on_load = !start_hidden && !open_settings;
+    let show_on_load = !start_hidden;
 
     let revealed = Arc::new(AtomicBool::new(false));
     let page_revealed = Arc::clone(&revealed);
