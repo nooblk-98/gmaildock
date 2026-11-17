@@ -15,6 +15,10 @@
   [![Platforms](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-informational)](https://github.com/nooblk-98/gmaildock/releases)
 </div>
 
+<p align="center">
+  <img src="assets/screenshot.png" width="820" alt="GmailDock on Windows showing the Gmail inbox, with the unread count in the window title">
+</p>
+
 GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. Its small Rust and Tauri shell is designed for fast startup and low app overhead while keeping Gmail's own interface. There is no Gmail API setup or OAuth client ID.
 
 Inspired by [whatRust](https://github.com/karem505/whatRust).
