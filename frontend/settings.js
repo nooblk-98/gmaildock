@@ -148,6 +148,13 @@
     el('repositoryLink').addEventListener('click', () => openAbout('repository'));
   }
 
+  async function bindSettingsChanges() {
+    await listen('settings-changed', (event) => {
+      settings = event.payload;
+      render();
+    }).catch(() => {});
+  }
+
   async function bindUpdates() {
     availableUpdate = await invoke('get_update_state').catch(() => null);
     renderUpdate();
@@ -186,6 +193,7 @@
     }
 
     bindEvents();
+    await bindSettingsChanges();
     await bindUpdates();
   }
 

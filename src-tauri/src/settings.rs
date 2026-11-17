@@ -6,9 +6,12 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::shortcut;
+use crate::{shortcut, tray};
+
+/// Sent to every window after settings change, so the Settings window and tray stay in sync.
+pub const CHANGED_EVENT: &str = "settings-changed";
 
 pub const SETTINGS_FILE: &str = "settings.json";
 pub const DEFAULT_SHORTCUT: &str = "CommandOrControl+Shift+G";
@@ -140,17 +143,19 @@ pub fn get_settings(store: State<'_, SettingsStore>) -> AppSettings {
 }
 
 #[tauri::command]
-pub fn save_settings(
-    app: AppHandle,
-    store: State<'_, SettingsStore>,
-    settings: AppSettings,
-) -> Result<AppSettings, String> {
+pub fn save_settings(app: AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
+    apply(&app, settings)
+}
+
+/// Saves settings and applies their side effects. Used by the Settings window and the tray menu.
+pub fn apply(app: &AppHandle, settings: AppSettings) -> Result<AppSettings, String> {
+    let store = app.state::<SettingsStore>();
     let previous = store.snapshot();
     let shortcut_changed = previous.shortcut != settings.shortcut;
 
     if shortcut_changed {
         shortcut::apply(
-            &app,
+            app,
             previous.shortcut.as_deref(),
             settings.shortcut.as_deref(),
         )?;
@@ -160,8 +165,9 @@ pub fn save_settings(
         Ok(saved) => saved,
         Err(error) => {
             if shortcut_changed {
-                let _ = shortcut::register(&app, previous.shortcut.as_deref());
+                let _ = shortcut::register(app, previous.shortcut.as_deref());
             }
+            tray::sync(app, &previous);
             return Err(format!("could not save settings: {error}"));
         }
     };
@@ -173,8 +179,13 @@ pub fn save_settings(
     }
 
     // Autostart is a side effect of the saved preference; a failure must not undo the save.
-    if let Err(error) = apply_autostart(&app, saved.start_at_login) {
+    if let Err(error) = apply_autostart(app, saved.start_at_login) {
         log::warn!("{error}");
+    }
+
+    tray::sync(app, &saved);
+    if let Err(error) = app.emit(CHANGED_EVENT, saved.clone()) {
+        log::warn!("could not announce the settings change: {error}");
     }
 
     Ok(saved)
