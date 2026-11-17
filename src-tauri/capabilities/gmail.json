@@ -1,0 +1,1 @@
+{"identifier":"gmail","description":"Update controls for the Gmail window","windows":["main"],"remote":{"urls":["https://mail.google.com/*"]},"permissions":[]}
