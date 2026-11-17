@@ -1,39 +1,51 @@
-<img src="assets/gmail.svg" width="64" height="64" alt="Gmail icon">
+<div align="center">
+  <img src="assets/gmail.svg" width="80" height="80" alt="GmailDock icon">
 
-# RustGmail
+  # GmailDock
 
-RustGmail is a small Tauri 2 desktop shell that opens the real [Gmail website](https://mail.google.com/) in the operating system's webview. It is inspired by [whatRust](https://github.com/karem505/whatRust). There is no Gmail API integration and no OAuth client ID to configure.
+  A small Rust desktop app for the real Gmail website.
 
-This is an independent, unofficial wrapper. It is not affiliated with or endorsed by Google. The app icon uses Google's [Gmail artwork](https://knowledge.workspace.google.com/admin/getting-started/brand-your-internal-communications-with-google-workspace).
+  [![Build and release](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml/badge.svg)](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml)
+  [![Latest release](https://img.shields.io/github/v/release/nooblk-98/gmaildock?label=release)](https://github.com/nooblk-98/gmaildock/releases)
+</div>
 
-The app hides the “Manage your Google Account” entry in Gmail’s account menu. This depends on Google’s page markup and may need adjustment if Google changes that menu.
+GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. It uses Gmail's own interface, so there is no Gmail API setup or OAuth client ID. The current app window and installer are named **RustGmail**.
 
-## Run
+Inspired by [whatRust](https://github.com/karem505/whatRust).
 
-Install [Rust](https://rustup.rs/), the [Tauri prerequisites](https://v2.tauri.app/start/prerequisites/), and Node.js. Then run:
+## Features
+
+- Gmail in a dedicated desktop window on Windows, macOS, and Linux.
+- Uses the system webview instead of bundling a browser engine. Windows uses WebView2.
+- Hides the “Manage your Google Account” link from Gmail's account menu.
+- Checks for updates in the background every 30 minutes. An install button appears only when an update is available.
+
+> [!IMPORTANT]
+> Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
+
+## Download
+
+Installers will be available on the [Releases page](https://github.com/nooblk-98/gmaildock/releases) after the first tagged release. Builds from branch pushes and pull requests are available as artifacts on the [Actions page](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml).
+
+## Run from source
+
+Install [Rust](https://rustup.rs/), Node.js, and the [Tauri 2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your operating system. Then run:
 
 ```sh
-npm install
+git clone https://github.com/nooblk-98/gmaildock.git
+cd gmaildock
+npm ci
 npm run dev
 ```
 
-To package the desktop app locally, run `npm run build`.
+To build a local installer, run `npm run build`. The bundles are written under `src-tauri/target/release/bundle/`.
 
 ## Releases and updates
 
-The [GitHub Actions workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux installers on pull requests and pushes. Pushing a tag matching the version in `src-tauri/tauri.conf.json` (for example `v0.2.0`) creates a release with signed update artifacts and `latest.json`.
+The [release workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux packages. A version tag creates a signed release and `latest.json` for the in-app updater. The updater checks this repository's [latest release](https://github.com/nooblk-98/gmaildock/releases/latest); it cannot offer an update before a signed release exists.
 
-The updater endpoint points to `nooblk-98/gmaildock`. The repository has the `TAURI_SIGNING_PRIVATE_KEY` Actions secret for signed releases. The local signing key is stored outside the repository at `~/.t3/keys/gmaildock.key`; back it up securely. Its public key is embedded in the app.
+Maintainers: update the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, then push a matching tag such as `v0.2.0`. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
 
-For each release:
+## About this project
 
-1. Update the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`.
-2. Push the matching `v` tag.
-
-The app checks for releases quietly after startup and every 30 minutes. An **Update** button appears only when a newer release is available and offers to download, verify, and install it. Updates cannot work until the first signed GitHub release is published.
-
-## Sign-in limitation
-
-Google may reject account sign-in from an embedded webview. If that happens, the real Gmail page can be displayed but the app cannot access a new account in that webview. Google recommends using a system browser for sign-in. See [Google's desktop OAuth guidance](https://developers.google.com/identity/protocols/oauth2/native-app).
-
-On Windows, Tauri uses the installed WebView2 runtime; it does not bundle a full browser engine. See [Tauri's webview documentation](https://v2.tauri.app/reference/webview-versions/).
+GmailDock is an independent, unofficial wrapper. It is not affiliated with or endorsed by Google. The icon adapts Google's [Gmail artwork](https://knowledge.workspace.google.com/admin/getting-started/brand-your-internal-communications-with-google-workspace). The account-menu adjustment depends on Google's page markup and may need changes when Gmail updates its interface.
