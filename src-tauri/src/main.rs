@@ -90,7 +90,7 @@ fn main() -> tauri::Result<()> {
         .setup(|app| {
             let url = tauri::Url::parse(GMAIL_URL)?;
             tauri::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
-                .title("RustGmail")
+                .title("GmailDock")
                 .inner_size(1200.0, 780.0)
                 .min_inner_size(780.0, 540.0)
                 .initialization_script_for_all_frames(include_str!("injected.js"))

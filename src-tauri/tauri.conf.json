@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "RustGmail",
+  "productName": "GmailDock",
   "version": "0.2.0",
   "identifier": "app.rustgmail.desktop",
   "build": { "frontendDist": "https://mail.google.com/" },

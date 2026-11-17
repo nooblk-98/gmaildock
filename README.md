@@ -9,7 +9,7 @@
   [![Latest release](https://img.shields.io/github/v/release/nooblk-98/gmaildock?label=release)](https://github.com/nooblk-98/gmaildock/releases)
 </div>
 
-GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. Its small Rust and Tauri shell is designed for fast startup and low app overhead while keeping Gmail's own interface. There is no Gmail API setup or OAuth client ID. The current app window and installer are named **RustGmail**.
+GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. Its small Rust and Tauri shell is designed for fast startup and low app overhead while keeping Gmail's own interface. There is no Gmail API setup or OAuth client ID.
 
 Inspired by [whatRust](https://github.com/karem505/whatRust).
 
@@ -17,7 +17,7 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 - Gmail in a dedicated desktop window on Windows, macOS, and Linux.
 - Reuses the system webview instead of bundling a browser engine, keeping the app lightweight. Windows uses WebView2. Gmail's own memory and CPU use still depends on the page and your account.
-- Has an in-app Settings button for automatic update checks and the account-menu adjustment.
+- Has an in-app Settings button for automatic update checks and the account-menu adjustment. It also hides Gmail's Google apps launcher.
 - Checks for updates in the background every 30 minutes when enabled. An install button appears only when an update is available.
 
 > [!IMPORTANT]
@@ -25,7 +25,7 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 
 ## Download
 
-Installers will be available on the [Releases page](https://github.com/nooblk-98/gmaildock/releases) after the first tagged release. Builds from branch pushes and pull requests are available as artifacts on the [Actions page](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml).
+Download installers from the [Releases page](https://github.com/nooblk-98/gmaildock/releases). Builds from branch pushes and pull requests are available as artifacts on the [Actions page](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml).
 
 ## Run from source
 
@@ -42,7 +42,7 @@ To build a local installer, run `npm run build`. The bundles are written under `
 
 ## Releases and updates
 
-The [release workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux packages. A version tag creates a signed release and `latest.json` for the in-app updater. The updater checks this repository's [latest release](https://github.com/nooblk-98/gmaildock/releases/latest); it cannot offer an update before a signed release exists.
+The [release workflow](.github/workflows/build-release.yml) builds Windows, macOS, and Linux packages. A version tag creates a signed release and `latest.json` for the in-app updater. The updater checks this repository's [latest release](https://github.com/nooblk-98/gmaildock/releases/latest).
 
 Maintainers: update the version in `package.json`, `src-tauri/Cargo.toml`, and `src-tauri/tauri.conf.json`, then push a matching tag such as `v0.2.0`. The repository's `TAURI_SIGNING_PRIVATE_KEY` Actions secret is configured; keep the private key outside the repository. Forks need their own signing key, matching updater public key, and release endpoint.
 
