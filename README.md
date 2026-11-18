@@ -72,6 +72,10 @@ npm run dev
 
 To build a local installer, run `npm run build`. The bundles are written under `src-tauri/target/release/bundle/`.
 
+## Troubleshooting
+
+Security warnings, Linux tray and shortcut issues, notifications, and uninstalling are covered in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
+
 ## Testing and contributing
 
 GmailDock is currently tested hands-on on Windows. The release workflow builds macOS and Linux packages, but those platforms need more real-world testing. If you use macOS or Linux, please try a release and [open an issue](https://github.com/nooblk-98/gmaildock/issues) with your OS version, package type, steps to reproduce, and any error you see.
@@ -91,15 +95,3 @@ GmailDock only wraps the Gmail website. It does not read, upload, or store your 
 ## About this project
 
 GmailDock is an independent, unofficial wrapper. It is not affiliated with or endorsed by Google. The icon adapts Google's [Gmail artwork](https://knowledge.workspace.google.com/admin/getting-started/brand-your-internal-communications-with-google-workspace). The account-menu adjustment depends on Google's page markup and may need changes when Gmail updates its interface.
-
-### Platform troubleshooting
-
-Builds currently have no paid OS code signing or Apple notarization. Download only from this repository. On macOS, use System Settings → Privacy & Security → Open Anyway if Gatekeeper blocks a trusted download. On Windows, an unsigned build may trigger SmartScreen.
-
-GNOME may need an AppIndicator extension to display the tray. Linux dock badges require a desktop that supports the Unity launcher API; a window title and tray tooltip also show unread counts. Global shortcuts can fail on Wayland or when another application reserves the keys. The tray then shows **Shortcut unavailable**; pick another shortcut there or enter a custom one in **Preferences…**.
-
-Open **Preferences…** from the tray (or with `Cmd+,` on macOS). Diagnostics can be selected and copied there; resetting preferences keeps your Google session. After denying notifications, enable GmailDock in your OS notification settings. The desktop notification plugin cannot reliably report OS denial.
-
-Before uninstalling, turn off **Start at login** (tray → Preferences). Removing a macOS app by dragging it to Trash does not run an uninstall hook. If already removed, delete its GmailDock LaunchAgent in `~/Library/LaunchAgents`; on Linux remove its GmailDock entry in `~/.config/autostart`. On Windows disable its entry in Startup Apps.
-
-Downloads finish with a notification even when WebKit omits the destination. **Troubleshooting → Open Downloads folder** reveals the latest downloaded file when available.
