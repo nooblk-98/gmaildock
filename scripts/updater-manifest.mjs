@@ -41,7 +41,9 @@ for (const [name, asset] of assets) {
   const signature = assets.get(`${name}.sig`);
   if (!signature) throw new Error(`${name} has no .sig file`);
   const text = gh('api', '-H', 'Accept: application/octet-stream', signature.apiUrl).trim();
-  for (const key of match[1]) platforms[key] = { signature: text, url: asset.url };
+  // The API URL stays valid when the draft is published; a draft's browser URL points at an
+  // "untagged-..." path that breaks afterwards. The updater downloads it with Accept: application/octet-stream.
+  for (const key of match[1]) platforms[key] = { signature: text, url: asset.apiUrl };
 }
 
 const notesFile = `.github/release-notes/${tag}.md`;

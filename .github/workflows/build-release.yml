@@ -206,6 +206,13 @@ jobs:
               console.error("latest.json is missing: " + missing.join(", "));
               process.exit(1);
             }
+            const broken = Object.entries(manifest.platforms)
+              .filter(([, entry]) => !/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\/assets\/\d+$/.test(entry.url ?? "") || !entry.signature)
+              .map(([platform]) => platform);
+            if (broken.length > 0) {
+              console.error("latest.json has unstable URLs or missing signatures: " + broken.join(", "));
+              process.exit(1);
+            }
             console.log("latest.json covers every supported platform");
           ' "$RUNNER_TEMP/updater/latest.json"
       - name: Publish complete release
