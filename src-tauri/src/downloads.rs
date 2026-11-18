@@ -1,15 +1,16 @@
 //! Download completion handling, including WebKit's missing completion path.
-use std::{
-    collections::{HashMap, VecDeque},
-    path::PathBuf,
-    sync::Mutex,
-};
+use std::{collections::HashMap, path::PathBuf, sync::Mutex};
 use tauri::{webview::DownloadEvent, AppHandle, Manager, Webview};
 
 #[derive(Default)]
 pub struct DownloadState {
-    pending: Mutex<HashMap<String, VecDeque<PathBuf>>>,
+    pending: Mutex<HashMap<String, PendingDownloads>>,
     latest: Mutex<Option<PathBuf>>,
+}
+
+struct PendingDownloads {
+    count: usize,
+    destination: Option<PathBuf>,
 }
 
 pub fn handle(webview: Webview, event: DownloadEvent<'_>) -> bool {
@@ -23,13 +24,26 @@ pub fn handle(webview: Webview, event: DownloadEvent<'_>) -> bool {
                 .lock()
                 .unwrap_or_else(|p| p.into_inner())
                 .entry(url.to_string())
-                .or_default()
-                .push_back(destination.clone());
+                .and_modify(|downloads| {
+                    downloads.count += 1;
+                    // A URL alone can't identify which of these downloads finished.
+                    downloads.destination = None;
+                })
+                .or_insert_with(|| PendingDownloads {
+                    count: 1,
+                    destination: Some(destination.clone()),
+                });
         }
         DownloadEvent::Finished { url, path, success } => {
             let mut pending = state.pending.lock().unwrap_or_else(|p| p.into_inner());
-            let fallback = pending.get_mut(url.as_str()).and_then(VecDeque::pop_front);
-            if pending.get(url.as_str()).is_some_and(VecDeque::is_empty) {
+            let fallback = pending.get_mut(url.as_str()).and_then(|downloads| {
+                downloads.count -= 1;
+                downloads.destination.take()
+            });
+            if pending
+                .get(url.as_str())
+                .is_some_and(|downloads| downloads.count == 0)
+            {
                 pending.remove(url.as_str());
             }
             drop(pending);

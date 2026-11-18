@@ -115,14 +115,20 @@ pub fn check_from_tray(app: AppHandle) {
             Ok(Some(version)) => {
                 log::info!("update {version} is available");
                 app.state::<UpdateState>().store(Some(version.clone()));
-                let mut current = app.state::<SettingsStore>().snapshot();
-                if current.skipped_version.as_deref() == Some(version.as_str()) {
-                    current.skipped_version = None;
-                    if let Err(error) = settings::apply(&app, current) {
-                        log::warn!("could not clear the skipped version: {error}");
+                let handle = app.clone();
+                let available = version.clone();
+                if let Err(error) = app.run_on_main_thread(move || {
+                    let mut current = handle.state::<SettingsStore>().snapshot();
+                    if current.skipped_version.as_deref() == Some(available.as_str()) {
+                        current.skipped_version = None;
+                        if let Err(error) = settings::apply(&handle, current) {
+                            log::warn!("could not clear the skipped version: {error}");
+                        }
                     }
+                    tray::refresh(&handle);
+                }) {
+                    log::warn!("could not refresh the skipped update: {error}");
                 }
-                tray::refresh(&app);
                 announce(&app, &version);
             }
             Ok(None) => {

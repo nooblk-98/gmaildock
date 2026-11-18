@@ -22,10 +22,16 @@ async function load() {
 document.querySelector('form').addEventListener('submit', async (event) => {
   event.preventDefault();
   try {
-    const settings = { ...current };
-    for (const key of Object.keys(fields)) settings[key] = document.getElementById(key).checked;
-    settings.shortcut = document.querySelector('#shortcut').value.trim() || null;
-    settings.zoom = Number(document.querySelector('#zoom').value);
+    if (!current) return;
+    const settings = {};
+    for (const key of Object.keys(fields)) {
+      const checked = document.getElementById(key).checked;
+      if (checked !== current[key]) settings[key] = checked;
+    }
+    const shortcut = document.querySelector('#shortcut').value.trim();
+    if (shortcut !== (current.shortcut ?? '')) settings.shortcut = shortcut;
+    const zoom = Number(document.querySelector('#zoom').value);
+    if (zoom !== current.zoom) settings.zoom = zoom;
     await invoke('save_preferences', { settings }); await load(); status.textContent = 'Preferences saved.';
   } catch (error) { status.textContent = String(error); }
 });
