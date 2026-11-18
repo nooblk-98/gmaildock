@@ -21,13 +21,10 @@
 
 GmailDock opens [mail.google.com](https://mail.google.com/) in your operating system's webview. Its small Rust and Tauri shell is designed for fast startup and low app overhead while keeping Gmail's own interface. There is no Gmail API setup or OAuth client ID.
 
-Inspired by [whatRust](https://github.com/karem505/whatRust).
-
 ## Features
 
 **Performance**
-- Small download: about 3 MB on Windows, 5 MB on macOS, and 7 MB for the Linux .deb and .rpm packages. The AppImage is larger because it bundles its own libraries.
-- No bundled browser engine. GmailDock uses the webview your system already has: WebView2 on Windows and WebKit on macOS and Linux. Electron apps instead ship a full copy of Chromium.
+- No bundled browser engine. GmailDock uses the webview your system already has: WebView2 on Windows and WebKit on macOS and Linux, so downloads stay small.
 - Lighter than running a whole browser just for Gmail: no browser toolbar, extensions, or other tabs running alongside it. The app shell around Gmail is written in Rust.
 - Gmail itself uses about the same memory as in a browser tab, because it is the same page. The savings come from everything around it.
 
@@ -55,9 +52,41 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
 
+## Customization
+
+Open the tray icon's right-click menu for everyday options, or **Preferences…** (tray, or Cmd+, on macOS) for the custom shortcut, diagnostics, and reset.
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| Start at login | On | Launches GmailDock when you sign in to your computer. |
+| Start minimized | Off | Starts in the tray instead of showing the window at login. |
+| Keep running when closed | On | Closing the window hides it to the tray; turn off to quit on close. |
+| New mail notifications | On | Shows a desktop notification when your Inbox unread count increases. |
+| Open links in default browser | On | Non-Google links open in your browser instead of inside GmailDock. |
+| Check for updates | On | Checks in the background and notifies you; you can install or skip a version. |
+| Zoom | 100% | 50% to 200%; remembered between launches. |
+| Show/hide shortcut | Ctrl+Shift+G (Cmd+Shift+G on macOS) | Global shortcut to show or hide the window. Change or turn it off in Preferences…. |
+
+GmailDock also remembers window size and position. Gmail's own settings control themes, signatures, and mail behavior.
+
 ## Download
 
-Download installers from the [Releases page](https://github.com/nooblk-98/gmaildock/releases). Builds from branch pushes and pull requests are available as artifacts on the [Actions page](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml).
+Download installers from the [Releases page](https://github.com/nooblk-98/gmaildock/releases). Pull request builds are available as artifacts on the [Actions page](https://github.com/nooblk-98/gmaildock/actions/workflows/build-release.yml).
+
+### Which file do I need?
+
+| Your system | Download | Status |
+| --- | --- | --- |
+| Windows 10/11 (64-bit) | `GmailDock_<version>_x64-setup.exe` (or the `.msi`) | Tested |
+| Windows on ARM | `GmailDock_<version>_arm64-setup.exe` | Builds, community-tested |
+| macOS, Apple Silicon (M1 or newer) | `GmailDock_<version>_aarch64.dmg` | Builds, community-tested |
+| macOS, Intel | `GmailDock_<version>_x64.dmg` | Builds, community-tested |
+| Debian, Ubuntu (64-bit) | `GmailDock_<version>_amd64.deb` | Builds, community-tested |
+| Fedora, RHEL, openSUSE (64-bit) | `GmailDock-<version>-1.x86_64.rpm` | Builds, community-tested |
+| Any Linux (64-bit) | `GmailDock_<version>_amd64.AppImage` | Builds, community-tested |
+| Linux on ARM64 | `.deb`, `.rpm`, or `.AppImage` with `aarch64` or `arm64` in the name | Builds, community-tested |
+
+"Community-tested" means the release workflow builds these packages but the maintainer can only test on Windows. Please report what works and what does not. Unsigned builds may show security warnings; see [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 ## Run from source
 
@@ -92,6 +121,12 @@ Maintainers: run `npm run release -- X.Y.Z` to bump every version file and draft
 
 GmailDock only wraps the Gmail website. It does not read, upload, or store your mail, and it has no servers of its own. The only data it saves locally is a small settings file (update, tray, notification, link, zoom, and startup preferences) and a log file used for troubleshooting. Your Google session lives in the system webview, as in a browser. The updater contacts GitHub to look for new releases.
 
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
 ## About this project
 
 GmailDock is an independent, unofficial wrapper. It is not affiliated with or endorsed by Google. The icon adapts Google's [Gmail artwork](https://knowledge.workspace.google.com/admin/getting-started/brand-your-internal-communications-with-google-workspace). The account-menu adjustment depends on Google's page markup and may need changes when Gmail updates its interface.
+
+Inspired by [whatRust](https://github.com/karem505/whatRust).
