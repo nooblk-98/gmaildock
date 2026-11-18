@@ -142,13 +142,26 @@ fn is_google_host(host: &str) -> bool {
         || matches!(
             host,
             "mail.googleusercontent.com"
+                | "mail-attachment.googleusercontent.com"
                 | "docs.googleusercontent.com"
                 | "lh3.googleusercontent.com"
                 | "lh4.googleusercontent.com"
                 | "lh5.googleusercontent.com"
                 | "lh6.googleusercontent.com"
         )
+        || is_drive_download_host(host)
         || is_google_domain(host)
+}
+
+/// Drive and Docs downloads come from per-file hosts such as doc-0s-8c-docs.googleusercontent.com.
+fn is_drive_download_host(host: &str) -> bool {
+    host.strip_suffix("-docs.googleusercontent.com")
+        .is_some_and(|prefix| {
+            !prefix.is_empty()
+                && prefix
+                    .bytes()
+                    .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'-')
+        })
 }
 
 /// Matches google.com and Google's country domains (google.lk, google.co.uk, google.com.au, ...)
@@ -203,6 +216,14 @@ mod tests {
             true
         ));
         assert!(allow_in_app(
+            &url("https://mail-attachment.googleusercontent.com/attachment/u/0/"),
+            true
+        ));
+        assert!(allow_in_app(
+            &url("https://doc-0s-8c-docs.googleusercontent.com/docs/securesc/x"),
+            true
+        ));
+        assert!(allow_in_app(
             &url("https://accounts.youtube.com/accounts/CheckConnection"),
             true
         ));
@@ -228,6 +249,8 @@ mod tests {
             "https://google.com.de/",
             "https://google.co.io/",
             "https://untrusted.googleusercontent.com/",
+            "https://evil.doc-0s-docs.googleusercontent.com/",
+            "https://-docs.googleusercontent.com/",
             "https://notgoogle.com/",
             "https://google.com.evil.net/",
             "https://google.example/",

@@ -4,7 +4,7 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::window;
 
 pub fn apply(app: &AppHandle, previous: Option<&str>, next: Option<&str>) -> Result<(), String> {
-    if previous == next && crate::preferences::shortcut_error().is_none() {
+    if previous == next {
         return Ok(());
     }
 

@@ -23,7 +23,7 @@ cargo clippy --all-targets -- -D warnings
 cargo test
 ```
 
-CI runs the same checks. The native side lives in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `shortcut.rs`, `updater.rs`, and `downloads.rs`). All settings are tray menu items built in `tray.rs`; there is no separate settings page. The small script injected into Gmail is `src-tauri/src/injected.js`, and it can only call `set_unread_count`.
+CI runs the same checks. The native side lives in `src-tauri/src` (`main.rs` wires it together, with `settings.rs`, `badge.rs`, `tray.rs`, `window.rs`, `shortcut.rs`, `updater.rs`, `downloads.rs`, and `preferences.rs`). Everyday settings are tray menu items built in `tray.rs`. The local Preferences window (`ui/`, opened by `preferences.rs`) adds a custom shortcut, diagnostics, and reset; only that window can call `get_preferences` and `save_preferences`. The small script injected into Gmail is `src-tauri/src/injected.js`, and it can only call `set_unread_count`.
 
 ## Signing and notarization
 

@@ -44,12 +44,13 @@ Inspired by [whatRust](https://github.com/karem505/whatRust).
 - Remembers window size, position, and zoom.
 - Opens non-Google links in your default browser.
 
-**Settings and updates, all in the tray menu**
+**Settings and updates in the tray menu**
 - **Preferences**: start at login, start minimized, keep running when closed, new mail notifications, link handling, and automatic update checks.
 - **Zoom** from 50% to 200%, and a choice of **show or hide shortcut** (or off).
+- A small **Preferences…** window (tray, or Cmd+, on macOS) for a custom shortcut, diagnostics you can copy, and resetting preferences.
 - Checks for updates in the background and notifies you. **Install update** downloads it with progress in the tray tooltip, **What's new** opens the release notes, or **Skip** that version.
 - **About** opens this page, and the menu shows the installed version.
-- A log file for troubleshooting, opened from **Troubleshooting**.
+- A log file and your Downloads folder, opened from **Troubleshooting**.
 
 > [!IMPORTANT]
 > Google may block sign-in inside an embedded webview. If your account is not already signed in there, Gmail may be unable to open your inbox. This behavior is controlled by Google and the installed webview.
@@ -95,10 +96,10 @@ GmailDock is an independent, unofficial wrapper. It is not affiliated with or en
 
 Builds currently have no paid OS code signing or Apple notarization. Download only from this repository. On macOS, use System Settings → Privacy & Security → Open Anyway if Gatekeeper blocks a trusted download. On Windows, an unsigned build may trigger SmartScreen.
 
-GNOME may need an AppIndicator extension to display the tray. Linux dock badges require a desktop that supports the Unity launcher API; a window title and tray tooltip also show unread counts. Global shortcuts can fail on Wayland or when another application reserves the keys. Preferences shows registration errors and accepts a custom shortcut.
+GNOME may need an AppIndicator extension to display the tray. Linux dock badges require a desktop that supports the Unity launcher API; a window title and tray tooltip also show unread counts. Global shortcuts can fail on Wayland or when another application reserves the keys. The tray then shows **Shortcut unavailable**; pick another shortcut there or enter a custom one in **Preferences…**.
 
-Open Preferences from the application menu (`Ctrl+,` / `Cmd+,`) or tray. Diagnostics can be selected and copied there; resetting preferences keeps your Google session. After denying notifications, enable GmailDock in your OS notification settings. The desktop notification plugin cannot reliably report OS denial.
+Open **Preferences…** from the tray (or with `Cmd+,` on macOS). Diagnostics can be selected and copied there; resetting preferences keeps your Google session. After denying notifications, enable GmailDock in your OS notification settings. The desktop notification plugin cannot reliably report OS denial.
 
-Before uninstalling, turn off **Start at login** in Preferences. Removing a macOS app by dragging it to Trash does not run an uninstall hook. If already removed, delete its GmailDock LaunchAgent in `~/Library/LaunchAgents`; on Linux remove its GmailDock entry in `~/.config/autostart`. On Windows disable its entry in Startup Apps.
+Before uninstalling, turn off **Start at login** (tray → Preferences). Removing a macOS app by dragging it to Trash does not run an uninstall hook. If already removed, delete its GmailDock LaunchAgent in `~/Library/LaunchAgents`; on Linux remove its GmailDock entry in `~/.config/autostart`. On Windows disable its entry in Startup Apps.
 
 Downloads finish with a notification even when WebKit omits the destination. **Troubleshooting → Open Downloads folder** reveals the latest downloaded file when available.

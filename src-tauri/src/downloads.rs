@@ -17,6 +17,7 @@ pub fn handle(webview: Webview, event: DownloadEvent<'_>) -> bool {
     let state = app.state::<DownloadState>();
     match event {
         DownloadEvent::Requested { url, destination } => {
+            log::info!("download requested: {url}");
             state
                 .pending
                 .lock()
@@ -33,6 +34,7 @@ pub fn handle(webview: Webview, event: DownloadEvent<'_>) -> bool {
             }
             drop(pending);
             if !success {
+                log::warn!("download failed: {url}");
                 crate::tray::notify(
                     app,
                     "Download failed",
@@ -40,6 +42,10 @@ pub fn handle(webview: Webview, event: DownloadEvent<'_>) -> bool {
                 );
             } else {
                 let path = path.or(fallback);
+                match &path {
+                    Some(path) => log::info!("download finished: {}", path.display()),
+                    None => log::info!("download finished: {url}"),
+                }
                 let body = path
                     .as_ref()
                     .and_then(|p| p.file_name())

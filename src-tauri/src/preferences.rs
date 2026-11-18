@@ -40,24 +40,27 @@ pub fn open(app: &AppHandle) {
     }
 }
 
+/// macOS only: adds "Preferences…" (Cmd+,) to the standard app menu, keeping its Edit menu so
+/// copy and paste keep working. Windows and Linux get no menu bar; Preferences is in the tray.
+/// The tray's menu handler receives app-menu events too, so the "preferences" id needs no handler here.
+#[cfg(target_os = "macos")]
 pub fn install_menu(app: &AppHandle) -> tauri::Result<()> {
-    use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-    let preferences = MenuItemBuilder::with_id("preferences", "Preferences…")
-        .accelerator("CmdOrCtrl+,")
-        .build(app)?;
-    let menu = MenuBuilder::new(app)
-        .item(
-            &SubmenuBuilder::new(app, "GmailDock")
-                .item(&preferences)
-                .build()?,
-        )
-        .build()?;
+    use tauri::menu::{Menu, MenuItemBuilder, MenuItemKind, PredefinedMenuItem};
+    let menu = Menu::default(app)?;
+    if let Some(MenuItemKind::Submenu(app_menu)) = menu.items()?.into_iter().next() {
+        let preferences = MenuItemBuilder::with_id("preferences", "Preferences…")
+            .accelerator("CmdOrCtrl+,")
+            .build(app)?;
+        // After "About GmailDock" and its separator.
+        app_menu.insert(&preferences, 2)?;
+        app_menu.insert(&PredefinedMenuItem::separator(app)?, 3)?;
+    }
     app.set_menu(menu)?;
-    app.on_menu_event(|app, event| {
-        if event.id().as_ref() == "preferences" {
-            open(app);
-        }
-    });
+    Ok(())
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn install_menu(_app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
