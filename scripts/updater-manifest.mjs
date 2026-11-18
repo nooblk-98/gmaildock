@@ -31,9 +31,7 @@ const PLATFORMS = [
 const repo = process.env.GITHUB_REPOSITORY ?? 'nooblk-98/gmaildock';
 const gh = (...args) => execFileSync('gh', args, { encoding: 'utf8', maxBuffer: 64 * 1024 * 1024 });
 
-const releases = JSON.parse(gh('api', `repos/${repo}/releases?per_page=30`));
-const release = releases.find((candidate) => candidate.tag_name === tag);
-if (!release) throw new Error(`No release found for ${tag}`);
+const release = JSON.parse(gh('release', 'view', tag, '--repo', repo, '--json', 'assets'));
 
 const assets = new Map(release.assets.map((asset) => [asset.name, asset]));
 const platforms = {};
@@ -42,8 +40,10 @@ for (const [name, asset] of assets) {
   if (!match) continue;
   const signature = assets.get(`${name}.sig`);
   if (!signature) throw new Error(`${name} has no .sig file`);
-  const text = gh('api', '-H', 'Accept: application/octet-stream', signature.url).trim();
-  for (const key of match[1]) platforms[key] = { signature: text, url: asset.url };
+  const text = gh('api', '-H', 'Accept: application/octet-stream', signature.apiUrl).trim();
+  // The API URL stays valid when the draft is published; a draft's browser URL points at an
+  // "untagged-..." path that breaks afterwards. The updater downloads it with Accept: application/octet-stream.
+  for (const key of match[1]) platforms[key] = { signature: text, url: asset.apiUrl };
 }
 
 const notesFile = `.github/release-notes/${tag}.md`;

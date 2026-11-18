@@ -124,6 +124,17 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
 
 /// Rebuilds the tray menu so it reflects the current settings and update state.
 pub fn refresh(app: &AppHandle) {
+    // Queue from a worker: run_on_main_thread may execute inline on the GUI thread.
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let handle = app.clone();
+        if let Err(error) = app.run_on_main_thread(move || refresh_now(&handle)) {
+            log::warn!("could not schedule tray refresh: {error}");
+        }
+    });
+}
+
+fn refresh_now(app: &AppHandle) {
     let Some(tray) = app.tray_by_id(TRAY_ID) else {
         return;
     };
@@ -167,6 +178,7 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         );
     }
 
+    let shortcut_error = crate::preferences::shortcut_error();
     let active_shortcut = current
         .shortcut
         .as_deref()
@@ -179,7 +191,7 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
                 format!("{SHORTCUT_PREFIX}{index}"),
                 shortcut_label(accelerator),
             )
-            .checked(active_shortcut == Some(*accelerator))
+            .checked(shortcut_error.is_none() && active_shortcut == Some(*accelerator))
             .build(app)?,
         );
     }
@@ -187,7 +199,7 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         // A shortcut set in an older version stays selected until another one is picked.
         shortcut = shortcut.item(
             &CheckMenuItemBuilder::with_id("shortcut:custom", shortcut_label(custom))
-                .checked(true)
+                .checked(shortcut_error.is_none())
                 .build(app)?,
         );
     }
@@ -197,8 +209,20 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
             .build(app)?,
     );
 
+    if shortcut_error.is_some() {
+        shortcut = shortcut.item(
+            &MenuItemBuilder::with_id(
+                "shortcut_unavailable",
+                "Shortcut unavailable — open Preferences",
+            )
+            .enabled(false)
+            .build(app)?,
+        );
+    }
     let troubleshooting = SubmenuBuilder::new(app, "Troubleshooting")
         .text("open_logs", "Open logs folder")
+        .text("diagnostics", "Diagnostics and reset preferences…")
+        .text("downloads", "Open Downloads folder")
         .build()?;
 
     let version = MenuItemBuilder::with_id(
@@ -215,6 +239,7 @@ fn menu(app: &AppHandle) -> tauri::Result<Menu<Wry>> {
         .text("browser", "Open in browser")
         .text("reload", "Reload")
         .separator()
+        .text("preferences", "Preferences…")
         .item(&preferences.build()?)
         .item(&zoom.build()?)
         .item(&shortcut.build()?)
@@ -299,6 +324,8 @@ fn handle_menu_event(app: &AppHandle, id: &str) {
     }
 
     match id {
+        "preferences" | "diagnostics" => crate::preferences::open(app),
+        "downloads" => crate::downloads::open_folder(app),
         "accounts" => {
             if let Some(window) = window::show_main_window(app) {
                 if let Ok(url) = tauri::Url::parse(window::ACCOUNTS_URL) {

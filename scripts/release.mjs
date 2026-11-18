@@ -1,20 +1,33 @@
 #!/usr/bin/env node
-// Usage: npm run release -- <version> [--push]
-//   npm run release -- 0.2.5            bump every version file and draft release notes
-//   npm run release -- 0.2.5 --push     also commit, tag and push (starts the release workflow)
+// Usage: npm run release -- <version> [--push] [--dry-run]
+//   npm run release -- 0.3.4            bump every version file and draft release notes
+//   npm run release -- 0.3.4 --push     also commit, tag and push (starts the release workflow)
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 
 const [version, ...flags] = process.argv.slice(2);
 if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) {
-  console.error('Usage: npm run release -- <x.y.z> [--push]');
+  console.error('Usage: npm run release -- <x.y.z> [--push] [--dry-run]');
   process.exit(1);
 }
 const git = (...args) => execFileSync('git', args, { encoding: 'utf8' }).trim();
 
-if (git('status', '--porcelain')) {
-  console.error('Working tree is not clean. Commit or stash your changes first.');
-  process.exit(1);
+for (const flag of flags) {
+  if (!['--push', '--dry-run'].includes(flag)) throw new Error(`Unknown flag: ${flag}`);
+}
+const dryRun = flags.includes('--dry-run');
+if (!dryRun && git('status', '--porcelain')) throw new Error('Working tree is not clean. Commit or stash changes first.');
+if (git('tag', '--list', `v${version}`)) throw new Error(`Tag v${version} already exists`);
+if (flags.includes('--push')) {
+  if (!['main', 'master'].includes(git('branch', '--show-current'))) throw new Error('Release from main or master');
+  if (!/^https:\/\/github\.com\/nooblk-98\/gmaildock(?:\.git)?$|^git@github\.com:nooblk-98\/gmaildock(?:\.git)?$/.test(git('remote', 'get-url', 'origin'))) {
+    throw new Error('Unexpected origin; review the repository before publishing');
+  }
+  if (git('ls-remote', '--tags', 'origin', `refs/tags/v${version}`).trim()) throw new Error('Remote tag already exists');
+}
+if (dryRun) {
+  console.log(`Would bump ${JSON.parse(readFileSync('package.json', 'utf8')).version} -> ${version}, draft notes${flags.includes('--push') ? ', commit, tag and push' : ''}. No files changed.`);
+  process.exit(0);
 }
 
 const edit = (file, change) => {

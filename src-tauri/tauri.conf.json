@@ -14,7 +14,12 @@
       "icons/128x128.png",
       "icons/icon.ico",
       "icons/icon.icns"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "windows/installer-hooks.nsh"
+      }
+    }
   },
   "plugins": {
     "updater": {
@@ -23,5 +28,8 @@
         "https://github.com/nooblk-98/gmaildock/releases/latest/download/latest.json"
       ]
     }
+  },
+  "build": {
+    "frontendDist": "../ui"
   }
 }

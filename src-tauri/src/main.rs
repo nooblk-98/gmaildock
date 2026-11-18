@@ -2,6 +2,7 @@
 
 mod badge;
 mod downloads;
+mod preferences;
 mod settings;
 mod shortcut;
 mod tray;
@@ -51,6 +52,7 @@ fn main() -> tauri::Result<()> {
                 .build(),
         )
         .manage(UnreadState::new())
+        .manage(downloads::DownloadState::default())
         .manage(UpdateState::default())
         .on_window_event(|window, event| {
             if window.label() != window::LABEL {
@@ -77,7 +79,11 @@ fn main() -> tauri::Result<()> {
                 }
             }
         })
-        .invoke_handler(tauri::generate_handler![badge::set_unread_count])
+        .invoke_handler(tauri::generate_handler![
+            badge::set_unread_count,
+            preferences::get_preferences,
+            preferences::save_preferences
+        ])
         .setup(|app| {
             log::info!("GmailDock {} starting", env!("CARGO_PKG_VERSION"));
 
@@ -96,9 +102,11 @@ fn main() -> tauri::Result<()> {
 
             if let Err(error) = shortcut::register(app.handle(), settings.shortcut.as_deref()) {
                 log::warn!("global shortcut is unavailable: {error}");
+                preferences::set_shortcut_error(app.handle(), Some(error));
             }
 
             tray::build(app.handle())?;
+            preferences::install_menu(app.handle())?;
             window::create(app.handle(), settings)?;
             updater::spawn_background_checks(app.handle().clone());
             Ok(())

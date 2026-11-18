@@ -141,6 +141,9 @@ jobs:
           workspaces: src-tauri -> target
           key: ${{ matrix.target }}
       - run: npm ci
+      - name: Native platform tests
+        if: matrix.target == 'x86_64-pc-windows-msvc' || matrix.target == 'aarch64-apple-darwin'
+        run: cargo test --manifest-path src-tauri/Cargo.toml --target ${{ matrix.target }}
       - name: Load release notes
         if: startsWith(github.ref, 'refs/tags/v')
         id: release_notes
@@ -203,9 +206,26 @@ jobs:
               console.error("latest.json is missing: " + missing.join(", "));
               process.exit(1);
             }
+            const broken = Object.entries(manifest.platforms)
+              .filter(([, entry]) => !/^https:\/\/api\.github\.com\/repos\/[^/]+\/[^/]+\/releases\/assets\/\d+$/.test(entry.url ?? "") || !entry.signature)
+              .map(([platform]) => platform);
+            if (broken.length > 0) {
+              console.error("latest.json has unstable URLs or missing signatures: " + broken.join(", "));
+              process.exit(1);
+            }
             console.log("latest.json covers every supported platform");
           ' "$RUNNER_TEMP/updater/latest.json"
       - name: Publish complete release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: gh release edit "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --draft=false --latest
+
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: rustsec/audit-check@v2
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: src-tauri
